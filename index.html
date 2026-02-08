@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wanderlust - AI Travel Itinerary Generator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700;900&family=DM+Sans:wght@400;500;700&family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --sunset-orange: #FF6B35;
+            --deep-teal: #004E64;
+            --warm-sand: #F7E7CE;
+            --forest-green: #25A18E;
+            --midnight: #1A1A2E;
+            --soft-cream: #FFF8F0;
+            --accent-coral: #FF9F68;
+            --text-dark: #2C2C2C;
+            --text-light: #6B6B6B;
+        }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: linear-gradient(135deg, var(--soft-cream) 0%, #FFE5D9 100%);
+            color: var(--text-dark);
+            overflow-x: hidden;
+            min-height: 100vh;
+        }
+
+        /* Decorative background elements */
+        body::before {
+            content: '';
+            position: fixed;
+            top: -50%;
+            right: -20%;
+            width: 800px;
+            height: 800px;
+            background: radial-gradient(circle, rgba(255,107,53,0.1) 0%, transparent 70%);
+            border-radius: 50%;
+            z-index: 0;
+            animation: float 20s infinite ease-in-out;
+        }
+
+        body::after {
+            content: '';
+            position: fixed;
+            bottom: -30%;
+            left: -10%;
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(0,78,100,0.08) 0%, transparent 70%);
+            border-radius: 50%;
+            z-index: 0;
+            animation: float 25s infinite ease-in-out reverse;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            50% { transform: translate(-30px, 30px) rotate(5deg); }
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Header */
+        header {
+            text-align: center;
+            padding: 4rem 0 3rem;
+            animation: fadeInDown 1s ease-out;
+        }
+
+        .logo {
+            font-family: 'Playfair Display', serif;
+            font-size: 5rem;
+            font-weight: 900;
+            background: linear-gradient(135deg, var(--sunset-orange) 0%, var(--deep-teal) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.5rem;
+            letter-spacing: -2px;
+            text-shadow: 0 4px 20px rgba(255,107,53,0.2);
+        }
+
+        .tagline {
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 1.5rem;
+            font-style: italic;
+            color: var(--text-light);
+            font-weight: 300;
+            letter-spacing: 1px;
+        }
+
+        /* Main Layout */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 3rem;
+            margin-top: 3rem;
+        }
+
+        @media (max-width: 1024px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Form Section */
+        .form-section {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(20px);
+            border-radius: 30px;
+            padding: 3rem;
+            box-shadow: 
+                0 20px 60px rgba(0,0,0,0.1),
+                inset 0 1px 0 rgba(255,255,255,0.6);
+            animation: fadeInLeft 1s ease-out 0.2s backwards;
+            border: 1px solid rgba(255,255,255,0.3);
+        }
+
+        .section-title {
+            font-family: 'Playfair Display', serif;
+            font-size: 2.5rem;
+            color: var(--deep-teal);
+            margin-bottom: 2rem;
+            font-weight: 700;
+        }
+
+        .form-group {
+            margin-bottom: 1.8rem;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            color: var(--text-dark);
+            margin-bottom: 0.6rem;
+            font-size: 0.95rem;
+            letter-spacing: 0.5px;
+        }
+
+        input[type="text"],
+        input[type="number"],
+        select,
+        textarea {
+            width: 100%;
+            padding: 1rem 1.2rem;
+            border: 2px solid rgba(0,78,100,0.15);
+            border-radius: 15px;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 1rem;
+            background: rgba(255,255,255,0.8);
+            transition: all 0.3s ease;
+            color: var(--text-dark);
+        }
+
+        input:focus,
+        select:focus,
+        textarea:focus {
+            outline: none;
+            border-color: var(--sunset-orange);
+            background: white;
+            box-shadow: 0 4px 20px rgba(255,107,53,0.15);
+            transform: translateY(-2px);
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .checkbox-group,
+        .tag-input-wrapper {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.8rem;
+        }
+
+        .tag {
+            padding: 0.6rem 1.2rem;
+            background: var(--warm-sand);
+            border-radius: 20px;
+            font-size: 0.9rem;
+            color: var(--text-dark);
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            user-select: none;
+        }
+
+        .tag:hover {
+            background: var(--accent-coral);
+            color: white;
+            transform: translateY(-2px);
+        }
+
+        .tag.active {
+            background: var(--sunset-orange);
+            color: white;
+            border-color: var(--deep-teal);
+        }
+
+        .tag-input-container {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 0.8rem;
+        }
+
+        .tag-input-container input {
+            flex: 1;
+        }
+
+        .add-tag-btn {
+            padding: 1rem 1.5rem;
+            background: var(--forest-green);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .add-tag-btn:hover {
+            background: var(--deep-teal);
+            transform: translateY(-2px);
+        }
+
+        .generate-btn {
+            width: 100%;
+            padding: 1.5rem;
+            background: linear-gradient(135deg, var(--sunset-orange) 0%, var(--accent-coral) 100%);
+            color: white;
+            border: none;
+            border-radius: 20px;
+            font-size: 1.2rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.4s ease;
+            margin-top: 2rem;
+            box-shadow: 0 10px 30px rgba(255,107,53,0.3);
+            font-family: 'DM Sans', sans-serif;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .generate-btn:hover:not(:disabled) {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 40px rgba(255,107,53,0.4);
+        }
+
+        .generate-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .loading-spinner {
+            display: none;
+            width: 24px;
+            height: 24px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Results Section */
+        .results-section {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(20px);
+            border-radius: 30px;
+            padding: 3rem;
+            box-shadow: 
+                0 20px 60px rgba(0,0,0,0.1),
+                inset 0 1px 0 rgba(255,255,255,0.6);
+            animation: fadeInRight 1s ease-out 0.4s backwards;
+            border: 1px solid rgba(255,255,255,0.3);
+            min-height: 600px;
+        }
+
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            min-height: 500px;
+            text-align: center;
+            color: var(--text-light);
+        }
+
+        .empty-state-icon {
+            font-size: 5rem;
+            margin-bottom: 1rem;
+            opacity: 0.3;
+        }
+
+        .empty-state-text {
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 1.5rem;
+            font-style: italic;
+        }
+
+        .itinerary-header {
+            margin-bottom: 2rem;
+            padding-bottom: 2rem;
+            border-bottom: 2px solid var(--warm-sand);
+        }
+
+        .destination-name {
+            font-family: 'Playfair Display', serif;
+            font-size: 2.8rem;
+            color: var(--deep-teal);
+            margin-bottom: 0.5rem;
+            font-weight: 700;
+        }
+
+        .trip-meta {
+            display: flex;
+            gap: 2rem;
+            flex-wrap: wrap;
+            margin-top: 1rem;
+        }
+
+        .meta-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--text-light);
+            font-size: 0.95rem;
+        }
+
+        .meta-icon {
+            font-size: 1.2rem;
+        }
+
+        .activities-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+            margin-top: 1.5rem;
+        }
+
+        .activity-badge {
+            padding: 0.4rem 1rem;
+            background: linear-gradient(135deg, var(--forest-green), var(--deep-teal));
+            color: white;
+            border-radius: 15px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .day-card {
+            background: white;
+            border-radius: 20px;
+            padding: 2rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.08);
+            transition: all 0.3s ease;
+            border-left: 4px solid var(--sunset-orange);
+        }
+
+        .day-card:hover {
+            transform: translateX(5px);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.12);
+        }
+
+        .day-number {
+            font-family: 'Playfair Display', serif;
+            font-size: 2rem;
+            color: var(--sunset-orange);
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+
+        .day-section {
+            margin-bottom: 1.5rem;
+        }
+
+        .day-section-title {
+            font-weight: 700;
+            color: var(--deep-teal);
+            margin-bottom: 0.8rem;
+            font-size: 1.1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .day-section-content {
+            color: var(--text-dark);
+            line-height: 1.6;
+        }
+
+        .day-list {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .day-list li {
+            padding: 0.5rem 0;
+            padding-left: 1.5rem;
+            position: relative;
+        }
+
+        .day-list li::before {
+            content: '→';
+            position: absolute;
+            left: 0;
+            color: var(--sunset-orange);
+            font-weight: bold;
+        }
+
+        .travel-tips {
+            background: linear-gradient(135deg, rgba(255,107,53,0.1), rgba(0,78,100,0.1));
+            border-radius: 20px;
+            padding: 2rem;
+            margin-top: 2rem;
+        }
+
+        .tips-title {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.8rem;
+            color: var(--deep-teal);
+            margin-bottom: 1rem;
+            font-weight: 700;
+        }
+
+        .tips-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .tips-list li {
+            padding: 0.8rem 0;
+            padding-left: 2rem;
+            position: relative;
+            color: var(--text-dark);
+            line-height: 1.6;
+        }
+
+        .tips-list li::before {
+            content: '✦';
+            position: absolute;
+            left: 0;
+            color: var(--sunset-orange);
+            font-size: 1.2rem;
+        }
+
+        /* Animations */
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeInLeft {
+            from {
+                opacity: 0;
+                transform: translateX(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes fadeInRight {
+            from {
+                opacity: 0;
+                transform: translateX(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .fade-in {
+            animation: fadeInDown 0.6s ease-out;
+        }
+
+        /* Error message */
+        .error-message {
+            background: #FFE5E5;
+            border: 2px solid #FF6B6B;
+            border-radius: 15px;
+            padding: 1rem 1.5rem;
+            margin-top: 1rem;
+            color: #C92A2A;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+            animation: fadeInDown 0.3s ease-out;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1 class="logo">Wanderlust</h1>
+            <p class="tagline">Your AI-Powered Journey Begins Here</p>
+        </header>
+
+        <div class="main-grid">
+            <!-- Form Section -->
+            <div class="form-section">
+                <h2 class="section-title">Plan Your Journey</h2>
+                
+                <form id="itineraryForm">
+                    <div class="form-group">
+                        <label for="place">Destination</label>
+                        <input type="text" id="place" name="place" placeholder="e.g., Goa, India" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="duration">Trip Duration (days)</label>
+                        <input type="number" id="duration" name="duration" min="1" max="30" value="4" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="people">Number of Travelers</label>
+                        <input type="number" id="people" name="people" min="1" max="50" value="2" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Travel Theme</label>
+                        <div class="checkbox-group" id="themeOptions">
+                            <span class="tag" data-value="Adventure">Adventure</span>
+                            <span class="tag" data-value="Relaxation">Relaxation</span>
+                            <span class="tag" data-value="Culture">Culture</span>
+                            <span class="tag" data-value="Nature">Nature</span>
+                            <span class="tag" data-value="Nightlife">Nightlife</span>
+                            <span class="tag" data-value="Foodie">Foodie</span>
+                            <span class="tag" data-value="Luxury">Luxury</span>
+                            <span class="tag" data-value="Budget">Budget</span>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="budget">Budget Level</label>
+                        <select id="budget" name="budget" required>
+                            <option value="budget">Budget</option>
+                            <option value="mid-range" selected>Mid-Range</option>
+                            <option value="luxury">Luxury</option>
+                            <option value="mixed">Mixed</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Interests</label>
+                        <div class="tag-input-container">
+                            <input type="text" id="interestInput" placeholder="Add interest (e.g., Photography)">
+                            <button type="button" class="add-tag-btn" onclick="addInterest()">Add</button>
+                        </div>
+                        <div class="tag-input-wrapper" id="interestTags"></div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="pace">Travel Pace</label>
+                        <select id="pace" name="pace" required>
+                            <option value="relaxed">Relaxed</option>
+                            <option value="balanced" selected>Balanced</option>
+                            <option value="fast-paced">Fast-Paced</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="accommodation">Accommodation Preference</label>
+                        <input type="text" id="accommodation" name="accommodation" placeholder="e.g., Near Beach, City Center">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="transport">Transportation</label>
+                        <input type="text" id="transport" name="transport" placeholder="e.g., Scooter, Public Transport">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="food">Food Preferences</label>
+                        <input type="text" id="food" name="food" placeholder="e.g., Must-try local dishes, Vegetarian">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="constraints">Special Requests/Constraints</label>
+                        <textarea id="constraints" name="constraints" placeholder="e.g., No early mornings, Must visit specific place"></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="dates">Travel Dates/Season</label>
+                        <textarea id="dates" name="dates" placeholder="e.g., March 2026, During Holi festival"></textarea>
+                    </div>
+
+                    <button type="submit" class="generate-btn" id="generateBtn">
+                        <span id="btnText">Generate My Itinerary</span>
+                        <div class="loading-spinner" id="loadingSpinner"></div>
+                    </button>
+
+                    <div class="error-message" id="errorMessage"></div>
+                </form>
+            </div>
+
+            <!-- Results Section -->
+            <div class="results-section">
+                <div class="empty-state" id="emptyState">
+                    <div class="empty-state-icon">✈️</div>
+                    <p class="empty-state-text">Your adventure awaits...<br>Fill out the form to generate your personalized itinerary</p>
+                </div>
+
+                <div id="itineraryResults" style="display: none;">
+                    <!-- Results will be populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================
+        // 🔧 CONFIGURATION - Update this for deployment
+        // ============================================
+        // For local development, use: http://localhost:8000
+        // For production, use your deployed backend URL from Render/Railway
+        // Example: https://wanderlust-api.onrender.com
+        
+        const API_URL = 'http://localhost:8000';
+        
+        // ============================================
+        
+        // State
+        let selectedThemes = [];
+        let interests = [];
+
+        // Initialize theme selection
+        document.querySelectorAll('#themeOptions .tag').forEach(tag => {
+            tag.addEventListener('click', function() {
+                this.classList.toggle('active');
+                const value = this.dataset.value;
+                
+                if (this.classList.contains('active')) {
+                    selectedThemes.push(value);
+                } else {
+                    selectedThemes = selectedThemes.filter(t => t !== value);
+                }
+            });
+        });
+
+        // Add interest function
+        function addInterest() {
+            const input = document.getElementById('interestInput');
+            const value = input.value.trim();
+            
+            if (value && !interests.includes(value)) {
+                interests.push(value);
+                renderInterests();
+                input.value = '';
+            }
+        }
+
+        // Allow Enter key to add interest
+        document.getElementById('interestInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                addInterest();
+            }
+        });
+
+        // Render interests
+        function renderInterests() {
+            const container = document.getElementById('interestTags');
+            container.innerHTML = interests.map(interest => `
+                <span class="tag active" onclick="removeInterest('${interest}')">
+                    ${interest} ×
+                </span>
+            `).join('');
+        }
+
+        // Remove interest
+        function removeInterest(interest) {
+            interests = interests.filter(i => i !== interest);
+            renderInterests();
+        }
+
+        // Form submission
+        document.getElementById('itineraryForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            // Validate theme selection
+            if (selectedThemes.length === 0) {
+                showError('Please select at least one travel theme');
+                return;
+            }
+
+            const formData = {
+                place: document.getElementById('place').value,
+                duration: parseInt(document.getElementById('duration').value),
+                theme: selectedThemes,
+                number_of_people: parseInt(document.getElementById('people').value),
+                budget_level: document.getElementById('budget').value,
+                interests: interests.length > 0 ? interests : ['General sightseeing'],
+                pace: document.getElementById('pace').value,
+                accommodation_area: document.getElementById('accommodation').value || 'City center',
+                transport_preference: document.getElementById('transport').value || 'Public transport',
+                food_preference: document.getElementById('food').value || 'Local cuisine',
+                constraints: document.getElementById('constraints').value.split(',').map(s => s.trim()).filter(s => s),
+                season_dates: document.getElementById('dates').value.split(',').map(s => s.trim()).filter(s => s)
+            };
+
+            await generateItinerary(formData);
+        });
+
+        // Generate itinerary
+        async function generateItinerary(data) {
+            const btn = document.getElementById('generateBtn');
+            const btnText = document.getElementById('btnText');
+            const spinner = document.getElementById('loadingSpinner');
+            const errorMsg = document.getElementById('errorMessage');
+            
+            // Show loading state
+            btn.disabled = true;
+            btnText.style.display = 'none';
+            spinner.style.display = 'block';
+            errorMsg.classList.remove('show');
+
+            try {
+                const response = await fetch(`${API_URL}/generate`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to generate itinerary');
+                }
+
+                const result = await response.json();
+                displayItinerary(result.data);
+                
+            } catch (error) {
+                showError('Failed to generate itinerary. Please make sure the backend server is running on port 8000.');
+                console.error('Error:', error);
+            } finally {
+                // Reset button state
+                btn.disabled = false;
+                btnText.style.display = 'inline';
+                spinner.style.display = 'none';
+            }
+        }
+
+        // Display itinerary
+        function displayItinerary(data) {
+            const emptyState = document.getElementById('emptyState');
+            const results = document.getElementById('itineraryResults');
+            
+            emptyState.style.display = 'none';
+            results.style.display = 'block';
+            
+            results.innerHTML = `
+                <div class="itinerary-header fade-in">
+                    <h2 class="destination-name">${data.destination}</h2>
+                    <div class="trip-meta">
+                        <div class="meta-item">
+                            <span class="meta-icon">📅</span>
+                            <span>${data.duration} Days</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-icon">💰</span>
+                            <span>${data.budget_level}</span>
+                        </div>
+                    </div>
+                    ${data.activities && data.activities.length > 0 ? `
+                        <div class="activities-list">
+                            ${data.activities.map(activity => `
+                                <span class="activity-badge">${activity}</span>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+
+                <div class="days-container">
+                    ${data.days.map((day, index) => `
+                        <div class="day-card fade-in" style="animation-delay: ${index * 0.1}s">
+                            <h3 class="day-number">Day ${day.day}</h3>
+                            
+                            ${day.places && day.places.length > 0 ? `
+                                <div class="day-section">
+                                    <div class="day-section-title">
+                                        <span>📍</span> Places to Visit
+                                    </div>
+                                    <ul class="day-list">
+                                        ${day.places.map(place => `<li>${place}</li>`).join('')}
+                                    </ul>
+                                </div>
+                            ` : ''}
+                            
+                            ${day.activities && day.activities.length > 0 ? `
+                                <div class="day-section">
+                                    <div class="day-section-title">
+                                        <span>🎯</span> Activities
+                                    </div>
+                                    <ul class="day-list">
+                                        ${day.activities.map(activity => `<li>${activity}</li>`).join('')}
+                                    </ul>
+                                </div>
+                            ` : ''}
+                            
+                            ${day.food && day.food.length > 0 ? `
+                                <div class="day-section">
+                                    <div class="day-section-title">
+                                        <span>🍽️</span> Food Recommendations
+                                    </div>
+                                    <ul class="day-list">
+                                        ${day.food.map(food => `<li>${food}</li>`).join('')}
+                                    </ul>
+                                </div>
+                            ` : ''}
+                            
+                            ${day.stay ? `
+                                <div class="day-section">
+                                    <div class="day-section-title">
+                                        <span>🏨</span> Accommodation
+                                    </div>
+                                    <div class="day-section-content">${day.stay}</div>
+                                </div>
+                            ` : ''}
+                        </div>
+                    `).join('')}
+                </div>
+
+                ${data.travel_tips && data.travel_tips.length > 0 ? `
+                    <div class="travel-tips fade-in">
+                        <h3 class="tips-title">Travel Tips</h3>
+                        <ul class="tips-list">
+                            ${data.travel_tips.map(tip => `<li>${tip}</li>`).join('')}
+                        </ul>
+                    </div>
+                ` : ''}
+            `;
+
+            // Scroll to results
+            results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        // Show error message
+        function showError(message) {
+            const errorMsg = document.getElementById('errorMessage');
+            errorMsg.textContent = message;
+            errorMsg.classList.add('show');
+        }
+    </script>
+</body>
+</html>
