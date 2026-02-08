@@ -1,18 +1,5 @@
-openai==1.54.0
-
-# Utilities
+fastapi==0.109.2
+uvicorn[standard]==0.27.1
 python-dotenv==1.0.1
-
-pydantic==2.10.3
-
-# Development
-pytest==7.4.3
-black==23.11.0
-flake8==6.1.0
-
-
-fastapi==0.115.0
-uvicorn[standard]==0.32.1
-
-
-
+openai==1.12.0
+pydantic==2.6.1
