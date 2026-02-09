@@ -84,103 +84,105 @@ def generate_itinerary(request: ItineraryRequest) -> dict:
     Generate travel itinerary using OpenAI
     """
     
-    PROMPT = f"""
-Act as an expert travel consultant with 10+ years of experience in luxury and local-authentic travel planning. Create a highly detailed, optimized travel itinerary based on the following constraints:
+    PROMPT = """
+Act as an expert travel consultant with 10+ years of experience in luxury and local-authentic travel planning.
 
-DESTINATION: {request.place}
-TRIP DURATION: {request.duration} days
-THEME: {", ".join(request.theme)}
-TRAVELERS: {request.number_of_people}
-BUDGET LEVEL: {request.budget_level}
-INTERESTS: {", ".join(request.interests)}
-PACE: {request.pace}
-ACCOMMODATION AREA: {request.accommodation_area}
-TRANSPORT: {request.transport_preference}
-FOOD: {request.food_preference}
-CONSTRAINTS: {", ".join(request.constraints)}
-SEASON: {", ".join(request.season_dates)}
+Create a highly detailed, optimized travel itinerary based on the following constraints.
 
-OUTPUT FORMAT RULE:
+DESTINATION: {place}
+TRIP DURATION: {duration} days
+THEME: {theme}
+TRAVELERS: {travelers}
+BUDGET LEVEL: {budget}
+INTERESTS: {interests}
+PACE: {pace}
+ACCOMMODATION AREA: {accommodation}
+TRANSPORT: {transport}
+FOOD: {food}
+CONSTRAINTS: {constraints}
+SEASON / DATES: {season}
+
+========================
+OUTPUT FORMAT (STRICT)
+========================
 - Output ONLY valid JSON
-- JSON MUST MATCH THE SCHEMA EXACTLY
-- DO NOT add explanations or text outside JSON
+- JSON MUST start with {{ and end with }}
+- DO NOT include markdown, explanations, or comments
+- DO NOT include any text outside JSON
 
-You MUST generate a FULL-DAY itinerary for EACH day.
+========================
+TOP-LEVEL JSON KEYS
+========================
+The JSON object MUST include the following keys:
 
-STRICT RULES (DO NOT VIOLATE):
+- destination
+- duration
+- budget_level
+- days
+- travel_tips
+
+========================
+DAY STRUCTURE RULES
+========================
+- Generate a FULL-DAY itinerary for EACH day
 - Each day MUST start between 7:00 AM – 9:00 AM
-- Each day MUST end between 10:00 PM – 12:00 PM
-- Time must progress continuously throughout the day
-- NO large gaps longer than 90 minutes unless explicitly stated as rest
+- Each day MUST end between 10:00 PM – 12:00 AM
+- Time must progress continuously
+- No gaps longer than 90 minutes unless explicitly stated as rest
 
-FOOD RULES (MANDATORY):
-Each day MUST include ALL of the following meals in the "food" array:
+========================
+ACTIVITY RULES
+========================
+- Include morning, afternoon, evening, and night activities
+- Every place or activity MUST include:
+  - start_time
+  - end_time
+  - duration
+
+========================
+FOOD RULES (MANDATORY)
+========================
+Each day MUST include ALL meals in the "food" array:
 - Breakfast (7:00 AM – 9:00 AM)
 - Lunch (12:00 PM – 2:30 PM)
-- Snacks / Tea (4:00 PM – 6:00 PM) Optional
+- Snacks / Tea (4:00 PM – 6:00 PM) [optional]
 - Dinner (7:00 PM – 10:00 PM)
 
-If any meal is missing, the response is INVALID.
+========================
+FOOD OBJECT SCHEMA
+========================
+Each food item MUST follow this structure:
 
-ACTIVITIES RULES:
-- Include morning, afternoon, evening, and night activities
-- Use realistic travel and rest gaps
-- Every place/activity MUST include:
-  start_time, end_time, and duration
+{{
+  "meal_type": "Breakfast | Lunch | Snacks | Dinner",
+  "time": "string",
+  "restaurant_name": "string",
+  "location": "string",
+  "dishes": [
+    {{
+      "name": "string",
+      "description": "string"
+    }}
+  ],
+  "price_range": "$ | $$ | $$$",
+  "why_recommended": "string"
+}}
 
-    "food": [
-  {
-    "meal_type": "Breakfast | Lunch | Snacks | Dinner",
-    "time": "string",
-    "restaurant_name": "string",
-    "location": "string",
-    "dishes": [
-      {
-        "name": "string",
-        "description": "string"
-      }
-    ],
-    "price_range": "$ | $$ | $$$",
-    "why_recommended": "string"
-  }
-]
+========================
+CRITICAL FOOD INSTRUCTIONS
+========================
+- NEVER use generic terms like "local food" or "traditional cuisine"
+- ALWAYS use REAL dish names (e.g., Chicken Xacuti, Prawn Balchão)
+- Recommend 2–3 dishes per meal
+- Include REAL restaurant names where possible
+- Price range meaning:
+  $   = under $10
+  $$  = $10–30
+  $$$ = over $30
 
-    "stay": "Hotel/accommodation recommendation with brief description"
-    "travel_tips": [
-  "tip1",
-  "tip2",
-  "tip3",
-  "tip4",
-  "tip5"
-]
-    TRAVEL TIPS RULE:
-"travel_tips" must be a flexible-length array.
-Include as many useful, destination-specific tips as applicable.
-There is NO upper limit on the number of tips.
-Minimum: 1 tip.
-
-
-CRITICAL INSTRUCTIONS FOR FOOD RECOMMENDATIONS:
-- NEVER use generic terms like "local seafood", "traditional cuisine", "regional dishes"
-- ALWAYS specify EXACT dish names (e.g., "Chicken Xacuti", "Prawn Balchão", "Fish Curry Rice", "Bebinca")
-- For each meal, recommend 2-3 SPECIFIC dishes by their actual names
-- Include REAL restaurant names where possible (well-known local spots)
-- Each dish should have a brief description of what it is
-- Price range: $ (budget: under $10), $$ (mid-range: $10-30), $$$ (expensive: over $30)
-
-CRITICAL INSTRUCTIONS FOR TIMING:
-- Provide SPECIFIC start and end times for every place and activity
-- Use 12-hour format (e.g., "9:00 AM", "2:30 PM")
-- Times must flow logically throughout the day
-- Account for travel time between locations
-- Follow the specified pace: 
-  * Relaxed: More time at each place, fewer activities
-  * Balanced: Mix of time and activities
-  * Fast-paced: Many activities, shorter durations
-- Start times should typically be between 7:00 AM and 8:00 PM
-- Include realistic travel/buffer time
-
-EXAMPLE OF GOOD FOOD ENTRY:
+========================
+EXAMPLE FOOD ENTRY
+========================
 {{
   "meal_type": "Lunch",
   "time": "1:00 PM",
@@ -189,11 +191,11 @@ EXAMPLE OF GOOD FOOD ENTRY:
   "dishes": [
     {{
       "name": "Goan Fish Curry Rice",
-      "description": "Fresh kingfish in coconut-based curry with steamed rice"
+      "description": "Fresh kingfish cooked in coconut-based curry with steamed rice"
     }},
     {{
       "name": "Prawn Balchão",
-      "description": "Spicy tangy prawns in Goan pickle-style gravy"
+      "description": "Spicy tangy prawns in traditional Goan pickle-style gravy"
     }},
     {{
       "name": "Chicken Cafreal",
@@ -201,26 +203,51 @@ EXAMPLE OF GOOD FOOD ENTRY:
     }}
   ],
   "price_range": "$$",
-  "why_recommended": "Authentic Goan cuisine with fresh catch of the day, popular with locals"
+  "why_recommended": "Authentic Goan cuisine popular with locals"
 }}
 
-EXAMPLE OF GOOD PLACE ENTRY:
+========================
+EXAMPLE PLACE ENTRY
+========================
 {{
   "name": "Chapora Fort",
   "start_time": "9:00 AM",
   "end_time": "10:30 AM",
   "duration": "1.5 hours",
-  "description": "Historic Portuguese fort with panoramic views of Vagator Beach and Chapora River. Famous from Bollywood movie Dil Chahta Hai."
+  "description": "Historic Portuguese fort with panoramic views of Vagator Beach and the Chapora River"
 }}
 
-RULES:
+========================
+TRAVEL TIPS RULES
+========================
+- travel_tips must be an array
+- Minimum 1 tip
+- No upper limit
+- Tips must be destination-specific
+
+========================
+FINAL RULES (DO NOT BREAK)
+========================
 - No wrapper keys
 - No renamed fields
-- Start with {{ and end with }}
-- ALL times must be specified with start_time and end_time
-- ALL dishes must have specific names, NOT generic descriptions
-- Include actual restaurant names whenever possible
-"""
+- ALL times must use 12-hour format
+- ALL activities must include start_time and end_time
+- JSON MUST be valid and parseable
+""".format(
+    place=request.place,
+    duration=request.duration,
+    theme=", ".join(request.theme),
+    travelers=request.number_of_people,
+    budget=request.budget_level,
+    interests=", ".join(request.interests),
+    pace=request.pace,
+    accommodation=request.accommodation_area,
+    transport=request.transport_preference,
+    food=request.food_preference,
+    constraints=", ".join(request.constraints) if request.constraints else "None",
+    season=", ".join(request.season_dates) if request.season_dates else "Not specified",
+)
+
 
     response = client.chat.completions.create(
         model="gpt-4o-mini",
