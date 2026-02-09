@@ -248,7 +248,6 @@ FINAL RULES (DO NOT BREAK)
     season=", ".join(request.season_dates) if request.season_dates else "Not specified",
 )
 
-
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
@@ -286,6 +285,20 @@ FINAL RULES (DO NOT BREAK)
     missing = required_keys - itinerary.keys()
     if missing:
         raise RuntimeError(f"Missing required keys: {missing}")
+    
+    for day in itinerary.get("days", []):
+        activities = []
+        food = []
+
+        for item in day.get("activities", []):
+            if "meal_type" in item:
+                food.append(item)
+            else:
+                activities.append(item)
+
+        day["activities"] = activities
+        day["food"] = food
+
 
     return itinerary
 
