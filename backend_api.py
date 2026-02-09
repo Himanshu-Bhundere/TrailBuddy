@@ -5,6 +5,7 @@ Web API for generating travel itineraries using OpenAI
 
 import os
 import json
+import traceback
 from dotenv import load_dotenv
 from openai import OpenAI
 from fastapi import FastAPI, HTTPException
@@ -222,7 +223,7 @@ RULES:
 """
 
     response = client.chat.completions.create(
-        model="gpt-4",
+        model="gpt-4o-mini",
         messages=[
             {
                 "role": "system",
@@ -251,7 +252,6 @@ RULES:
         "destination",
         "duration",
         "budget_level",
-        "activities",
         "days",
         "travel_tips",
     }
@@ -288,15 +288,11 @@ async def create_itinerary(request: ItineraryRequest):
     """
     try:
         itinerary = generate_itinerary(request)
-        return {
-            "success": True,
-            "data": itinerary
-        }
+        return {"success": True, "data": itinerary}
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to generate itinerary: {str(e)}"
-        )
+        print("❌ ERROR IN /generate")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
 
 # --------------------------------------------------
 # RUN
