@@ -33,7 +33,10 @@ app = FastAPI(title="Travel Itinerary Generator")
 # Enable CORS for frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify your frontend domain
+    allow_origins=[
+        "https://trailbuddy-ai-itinerary.netlify.app",   #Netlify domain
+        "http://localhost:8000"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
