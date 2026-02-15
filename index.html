@@ -140,6 +140,116 @@
             font-weight: 700;
         }
 
+        /* Mode Switcher Tabs */
+        .mode-switcher {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            background: rgba(0,78,100,0.05);
+            padding: 0.5rem;
+            border-radius: 20px;
+        }
+
+        .mode-tab {
+            flex: 1;
+            padding: 1rem 1.5rem;
+            background: transparent;
+            border: none;
+            border-radius: 15px;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-light);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+
+        .mode-tab:hover {
+            color: var(--sunset-orange);
+        }
+
+        .mode-tab.active {
+            background: linear-gradient(135deg, var(--sunset-orange) 0%, var(--accent-coral) 100%);
+            color: white;
+            box-shadow: 0 5px 20px rgba(255,107,53,0.3);
+        }
+
+        .mode-content {
+            display: none;
+        }
+
+        .mode-content.active {
+            display: block;
+        }
+
+        /* Instagram URL Section */
+        .url-input-section {
+            margin-bottom: 2rem;
+        }
+
+        .url-input-label {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-weight: 600;
+            color: var(--text-dark);
+            margin-bottom: 0.8rem;
+            font-size: 1rem;
+        }
+
+        .url-input-wrapper {
+            position: relative;
+        }
+
+        .url-input {
+            width: 100%;
+            padding: 1.2rem 1.5rem;
+            padding-left: 3rem;
+            border: 2px solid rgba(0,78,100,0.15);
+            border-radius: 15px;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 1rem;
+            background: rgba(255,255,255,0.9);
+            transition: all 0.3s ease;
+        }
+
+        .url-input:focus {
+            outline: none;
+            border-color: var(--sunset-orange);
+            background: white;
+            box-shadow: 0 4px 20px rgba(255,107,53,0.15);
+        }
+
+        .url-input-icon {
+            position: absolute;
+            left: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-light);
+            font-size: 1.2rem;
+        }
+
+        .url-helper-text {
+            color: var(--text-light);
+            font-size: 0.85rem;
+            margin-top: 0.5rem;
+            font-style: italic;
+        }
+
+        .optional-fields {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+
+        @media (max-width: 768px) {
+            .optional-fields {
+                grid-template-columns: 1fr;
+            }
+        }
+
         .form-group {
             margin-bottom: 1.8rem;
         }
@@ -682,6 +792,62 @@
             <div class="form-section">
                 <h2 class="section-title">Plan Your Journey</h2>
                 
+                <!-- Mode Switcher -->
+                <div class="mode-switcher">
+                    <button type="button" class="mode-tab active" data-mode="instagram">
+                        🎥 From Instagram Reel
+                    </button>
+                    <button type="button" class="mode-tab" data-mode="manual">
+                        ✍️ Manual Entry
+                    </button>
+                </div>
+
+                <!-- Instagram Reel Mode -->
+                <div id="instagramMode" class="mode-content active">
+                    <div class="url-input-section">
+                        <div class="url-input-label">
+                            📷 Paste Instagram Reel URL
+                        </div>
+                        <div class="url-input-wrapper">
+                            <span class="url-input-icon">🔗</span>
+                            <input 
+                                type="text" 
+                                id="reelUrl" 
+                                class="url-input"
+                                placeholder="https://www.instagram.com/reel/ABC123/"
+                            />
+                        </div>
+                        <p class="url-helper-text">
+                            📱 Paste any public Instagram travel reel URL and we'll extract the itinerary for you!
+                        </p>
+                    </div>
+
+                    <!-- Optional Override Fields -->
+                    <div class="optional-fields">
+                        <div class="form-group">
+                            <label>Duration (Optional)</label>
+                            <input type="number" id="reelDuration" min="1" max="30" placeholder="Auto-detect">
+                        </div>
+                        <div class="form-group">
+                            <label>Budget Level (Optional)</label>
+                            <select id="reelBudget">
+                                <option value="">Auto-detect</option>
+                                <option value="budget">Budget</option>
+                                <option value="mid-range">Mid-Range</option>
+                                <option value="luxury">Luxury</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <button type="button" id="generateFromReel" class="generate-btn">
+                        <span id="reelButtonText">🚀 Generate from Reel</span>
+                        <div class="loading-spinner" id="reelSpinner"></div>
+                    </button>
+                </div>
+
+                <!-- Manual Entry Mode -->
+                <div id="manualMode" class="mode-content">
+                
                 <form id="itineraryForm">
                     <div class="form-group">
                         <label for="place">Destination</label>
@@ -773,6 +939,7 @@
 
                     <div class="error-message" id="errorMessage"></div>
                 </form>
+                </div> <!-- End Manual Mode -->
             </div>
 
             <!-- Results Section -->
@@ -793,12 +960,88 @@
         // ============================================
         // 🔧 CONFIGURATION - Update this for deployment
         // ============================================
-        // For local development, use: http://localhost:8000
-        // For production, use your deployed backend URL from Render/Railway
-        // Example: https://wanderlust-api.onrender.com
-        
         const API_URL = 'https://trailbuddy.onrender.com';
         
+        // ============================================
+        // MODE SWITCHING
+        // ============================================
+        document.querySelectorAll('.mode-tab').forEach(tab => {
+            tab.addEventListener('click', function() {
+                const mode = this.dataset.mode;
+                
+                // Update tabs
+                document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
+                this.classList.add('active');
+                
+                // Update content
+                document.querySelectorAll('.mode-content').forEach(c => c.classList.remove('active'));
+                if (mode === 'instagram') {
+                    document.getElementById('instagramMode').classList.add('active');
+                } else {
+                    document.getElementById('manualMode').classList.add('active');
+                }
+            });
+        });
+
+        // ============================================
+        // INSTAGRAM REEL HANDLING
+        // ============================================
+        document.getElementById('generateFromReel').addEventListener('click', async function() {
+            const reelUrl = document.getElementById('reelUrl').value.trim();
+            const durationOverride = document.getElementById('reelDuration').value;
+            const budgetLevel = document.getElementById('reelBudget').value;
+            
+            if (!reelUrl) {
+                showError('Please enter an Instagram reel URL');
+                return;
+            }
+            
+            // Validate URL format
+            if (!reelUrl.includes('instagram.com/reel/') && !reelUrl.includes('instagram.com/p/')) {
+                showError('Please enter a valid Instagram reel URL');
+                return;
+            }
+            
+            const btn = this;
+            const btnText = document.getElementById('reelButtonText');
+            const spinner = document.getElementById('reelSpinner');
+            
+            // Show loading
+            btn.disabled = true;
+            btnText.style.display = 'none';
+            spinner.style.display = 'block';
+            
+            try {
+                const payload = { reel_url: reelUrl };
+                if (durationOverride) payload.duration_override = parseInt(durationOverride);
+                if (budgetLevel) payload.budget_level = budgetLevel;
+                
+                const response = await fetch(`${API_URL}/generate-from-reel`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    displayItinerary(result.data, result.reel_data);
+                } else {
+                    throw new Error(result.detail || 'Failed to generate itinerary');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showError(error.message || 'An error occurred. Please try again.');
+            } finally {
+                // Reset button
+                btn.disabled = false;
+                btnText.style.display = 'inline';
+                spinner.style.display = 'none';
+            }
+        });
+        
+        // ============================================
+        // MANUAL FORM HANDLING
         // ============================================
         
         // State
@@ -923,8 +1166,11 @@
             }
         }
 
-        // Display itinerary
-        function displayItinerary(data) {
+        // ============================================
+        // DISPLAY ITINERARY
+        // ============================================
+        
+        function displayItinerary(data, reelData = null) {
             const emptyState = document.getElementById('emptyState');
             const results = document.getElementById('itineraryResults');
             
@@ -944,13 +1190,19 @@
                             <span>${capitalizeFirst(data.budget_level)}</span>
                         </div>
                     </div>
-                    ${data.activities && data.activities.length > 0 ? `
+                    ${data.theme && data.theme.length > 0 ? `
+                        <div class="activities-list">
+                            ${data.theme.map(theme => `
+                                <span class="activity-badge">${theme}</span>
+                            `).join('')}
+                        </div>
+                    ` : (data.activities && data.activities.length > 0 ? `
                         <div class="activities-list">
                             ${data.activities.map(activity => `
                                 <span class="activity-badge">${activity}</span>
                             `).join('')}
                         </div>
-                    ` : ''}
+                    ` : '')}
                 </div>
 
                 <div class="days-container">
@@ -1134,6 +1386,11 @@
             const errorMsg = document.getElementById('errorMessage');
             errorMsg.textContent = message;
             errorMsg.classList.add('show');
+            
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                errorMsg.classList.remove('show');
+            }, 5000);
         }
     </script>
 </body>
