@@ -7,778 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700;900&family=DM+Sans:wght@400;500;700&family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet">
-    
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        :root {
-            --sunset-orange: #FF6B35;
-            --deep-teal: #004E64;
-            --warm-sand: #F7E7CE;
-            --forest-green: #25A18E;
-            --midnight: #1A1A2E;
-            --soft-cream: #FFF8F0;
-            --accent-coral: #FF9F68;
-            --text-dark: #2C2C2C;
-            --text-light: #6B6B6B;
-        }
-
-        body {
-            font-family: 'DM Sans', sans-serif;
-            background: linear-gradient(135deg, var(--soft-cream) 0%, #FFE5D9 100%);
-            color: var(--text-dark);
-            overflow-x: hidden;
-            min-height: 100vh;
-        }
-
-        body::before {
-            content: '';
-            position: fixed;
-            top: -50%;
-            right: -20%;
-            width: 800px;
-            height: 800px;
-            background: radial-gradient(circle, rgba(255,107,53,0.1) 0%, transparent 70%);
-            border-radius: 50%;
-            z-index: 0;
-            animation: float 20s infinite ease-in-out;
-        }
-
-        body::after {
-            content: '';
-            position: fixed;
-            bottom: -30%;
-            left: -10%;
-            width: 600px;
-            height: 600px;
-            background: radial-gradient(circle, rgba(0,78,100,0.08) 0%, transparent 70%);
-            border-radius: 50%;
-            z-index: 0;
-            animation: float 25s infinite ease-in-out reverse;
-        }
-
-        @keyframes float {
-            0%, 100% { transform: translate(0, 0) rotate(0deg); }
-            50% { transform: translate(-30px, 30px) rotate(5deg); }
-        }
-
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 2rem;
-            position: relative;
-            z-index: 1;
-        }
-
-        header {
-            text-align: center;
-            padding: 4rem 0 3rem;
-            animation: fadeInDown 1s ease-out;
-        }
-
-        .logo {
-            font-family: 'Playfair Display', serif;
-            font-size: 5rem;
-            font-weight: 900;
-            background: linear-gradient(135deg, var(--sunset-orange) 0%, var(--deep-teal) 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            margin-bottom: 0.5rem;
-            letter-spacing: -2px;
-        }
-
-        .tagline {
-            font-family: 'Cormorant Garamond', serif;
-            font-size: 1.5rem;
-            font-style: italic;
-            color: var(--text-light);
-            font-weight: 300;
-            letter-spacing: 1px;
-        }
-
-        .main-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 3rem;
-            margin-top: 3rem;
-        }
-
-        @media (max-width: 1024px) {
-            .main-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        .form-section, .results-section {
-            background: rgba(255, 255, 255, 0.7);
-            backdrop-filter: blur(20px);
-            border-radius: 30px;
-            padding: 3rem;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.6);
-            border: 1px solid rgba(255,255,255,0.3);
-        }
-
-        .form-section {
-            animation: fadeInLeft 1s ease-out 0.2s backwards;
-        }
-
-        .results-section {
-            animation: fadeInRight 1s ease-out 0.4s backwards;
-            min-height: 600px;
-        }
-
-        .section-title {
-            font-family: 'Playfair Display', serif;
-            font-size: 2.5rem;
-            color: var(--deep-teal);
-            margin-bottom: 2rem;
-            font-weight: 700;
-        }
-
-        /* Mode Switcher Tabs */
-        .mode-switcher {
-            display: flex;
-            gap: 1rem;
-            margin-bottom: 2rem;
-            background: rgba(0,78,100,0.05);
-            padding: 0.5rem;
-            border-radius: 20px;
-        }
-
-        .mode-tab {
-            flex: 1;
-            padding: 1rem 1.5rem;
-            background: transparent;
-            border: none;
-            border-radius: 15px;
-            font-family: 'DM Sans', sans-serif;
-            font-size: 1rem;
-            font-weight: 600;
-            color: var(--text-light);
-            cursor: pointer;
-            transition: all 0.3s ease;
-            text-align: center;
-        }
-
-        .mode-tab:hover {
-            color: var(--sunset-orange);
-        }
-
-        .mode-tab.active {
-            background: linear-gradient(135deg, var(--sunset-orange) 0%, var(--accent-coral) 100%);
-            color: white;
-            box-shadow: 0 5px 20px rgba(255,107,53,0.3);
-        }
-
-        .mode-content {
-            display: none;
-        }
-
-        .mode-content.active {
-            display: block;
-        }
-
-        /* Instagram URL Section */
-        .url-input-section {
-            margin-bottom: 2rem;
-        }
-
-        .url-input-label {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            font-weight: 600;
-            color: var(--text-dark);
-            margin-bottom: 0.8rem;
-            font-size: 1rem;
-        }
-
-        .url-input-wrapper {
-            position: relative;
-        }
-
-        .url-input {
-            width: 100%;
-            padding: 1.2rem 1.5rem;
-            padding-left: 3rem;
-            border: 2px solid rgba(0,78,100,0.15);
-            border-radius: 15px;
-            font-family: 'DM Sans', sans-serif;
-            font-size: 1rem;
-            background: rgba(255,255,255,0.9);
-            transition: all 0.3s ease;
-        }
-
-        .url-input:focus {
-            outline: none;
-            border-color: var(--sunset-orange);
-            background: white;
-            box-shadow: 0 4px 20px rgba(255,107,53,0.15);
-        }
-
-        .url-input-icon {
-            position: absolute;
-            left: 1rem;
-            top: 50%;
-            transform: translateY(-50%);
-            color: var(--text-light);
-            font-size: 1.2rem;
-        }
-
-        .url-helper-text {
-            color: var(--text-light);
-            font-size: 0.85rem;
-            margin-top: 0.5rem;
-            font-style: italic;
-        }
-
-        .optional-fields {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1rem;
-            margin-top: 1.5rem;
-        }
-
-        @media (max-width: 768px) {
-            .optional-fields {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        .form-group {
-            margin-bottom: 1.8rem;
-        }
-
-        label {
-            display: block;
-            font-weight: 600;
-            color: var(--text-dark);
-            margin-bottom: 0.6rem;
-            font-size: 0.95rem;
-            letter-spacing: 0.5px;
-        }
-
-        input[type="text"],
-        input[type="number"],
-        select,
-        textarea {
-            width: 100%;
-            padding: 1rem 1.2rem;
-            border: 2px solid rgba(0,78,100,0.15);
-            border-radius: 15px;
-            font-family: 'DM Sans', sans-serif;
-            font-size: 1rem;
-            background: rgba(255,255,255,0.8);
-            transition: all 0.3s ease;
-            color: var(--text-dark);
-        }
-
-        input:focus,
-        select:focus,
-        textarea:focus {
-            outline: none;
-            border-color: var(--sunset-orange);
-            background: white;
-            box-shadow: 0 4px 20px rgba(255,107,53,0.15);
-            transform: translateY(-2px);
-        }
-
-        textarea {
-            resize: vertical;
-            min-height: 80px;
-        }
-
-        .checkbox-group,
-        .tag-input-wrapper {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.8rem;
-        }
-
-        .tag {
-            padding: 0.6rem 1.2rem;
-            background: var(--warm-sand);
-            border-radius: 20px;
-            font-size: 0.9rem;
-            color: var(--text-dark);
-            border: 2px solid transparent;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            user-select: none;
-        }
-
-        .tag:hover {
-            background: var(--accent-coral);
-            color: white;
-            transform: translateY(-2px);
-        }
-
-        .tag.active {
-            background: var(--sunset-orange);
-            color: white;
-            border-color: var(--deep-teal);
-        }
-
-        .tag-input-container {
-            display: flex;
-            gap: 0.5rem;
-            margin-bottom: 0.8rem;
-        }
-
-        .tag-input-container input {
-            flex: 1;
-        }
-
-        .add-tag-btn {
-            padding: 1rem 1.5rem;
-            background: var(--forest-green);
-            color: white;
-            border: none;
-            border-radius: 12px;
-            cursor: pointer;
-            font-weight: 600;
-            transition: all 0.3s ease;
-        }
-
-        .add-tag-btn:hover {
-            background: var(--deep-teal);
-            transform: translateY(-2px);
-        }
-
-        .generate-btn {
-            width: 100%;
-            padding: 1.5rem;
-            background: linear-gradient(135deg, var(--sunset-orange) 0%, var(--accent-coral) 100%);
-            color: white;
-            border: none;
-            border-radius: 20px;
-            font-size: 1.2rem;
-            font-weight: 700;
-            cursor: pointer;
-            transition: all 0.4s ease;
-            margin-top: 2rem;
-            box-shadow: 0 10px 30px rgba(255,107,53,0.3);
-            font-family: 'DM Sans', sans-serif;
-            letter-spacing: 1px;
-            text-transform: uppercase;
-        }
-
-        .generate-btn:hover:not(:disabled) {
-            transform: translateY(-3px);
-            box-shadow: 0 15px 40px rgba(255,107,53,0.4);
-        }
-
-        .generate-btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-
-        .loading-spinner {
-            display: none;
-            width: 24px;
-            height: 24px;
-            border: 3px solid rgba(255,255,255,0.3);
-            border-top-color: white;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        .empty-state {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100%;
-            min-height: 500px;
-            text-align: center;
-            color: var(--text-light);
-        }
-
-        .empty-state-icon {
-            font-size: 5rem;
-            margin-bottom: 1rem;
-            opacity: 0.3;
-        }
-
-        .empty-state-text {
-            font-family: 'Cormorant Garamond', serif;
-            font-size: 1.5rem;
-            font-style: italic;
-        }
-
-        .itinerary-header {
-            margin-bottom: 2rem;
-            padding-bottom: 2rem;
-            border-bottom: 2px solid var(--warm-sand);
-        }
-
-        .destination-name {
-            font-family: 'Playfair Display', serif;
-            font-size: 2.8rem;
-            color: var(--deep-teal);
-            margin-bottom: 0.5rem;
-            font-weight: 700;
-        }
-
-        .trip-meta {
-            display: flex;
-            gap: 2rem;
-            flex-wrap: wrap;
-            margin-top: 1rem;
-        }
-
-        .meta-item {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            color: var(--text-light);
-            font-size: 0.95rem;
-        }
-
-        .meta-icon {
-            font-size: 1.2rem;
-        }
-
-        .activities-list {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.6rem;
-            margin-top: 1.5rem;
-        }
-
-        .activity-badge {
-            padding: 0.4rem 1rem;
-            background: linear-gradient(135deg, var(--forest-green), var(--deep-teal));
-            color: white;
-            border-radius: 15px;
-            font-size: 0.85rem;
-            font-weight: 500;
-        }
-
-        .day-card {
-            background: white;
-            border-radius: 20px;
-            padding: 2rem;
-            margin-bottom: 1.5rem;
-            box-shadow: 0 8px 30px rgba(0,0,0,0.08);
-            transition: all 0.3s ease;
-            border-left: 4px solid var(--sunset-orange);
-        }
-
-        .day-card:hover {
-            transform: translateX(5px);
-            box-shadow: 0 12px 40px rgba(0,0,0,0.12);
-        }
-
-        .day-number {
-            font-family: 'Playfair Display', serif;
-            font-size: 2rem;
-            color: var(--sunset-orange);
-            font-weight: 700;
-            margin-bottom: 1.5rem;
-        }
-
-        .day-section {
-            margin-bottom: 2rem;
-        }
-
-        .day-section-title {
-            font-weight: 700;
-            color: var(--deep-teal);
-            margin-bottom: 1rem;
-            font-size: 1.1rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        /* Timeline for places and activities */
-        .timeline-items {
-            position: relative;
-            padding-left: 2rem;
-        }
-
-        .timeline-items::before {
-            content: '';
-            position: absolute;
-            left: 0;
-            top: 0;
-            bottom: 0;
-            width: 2px;
-            background: linear-gradient(to bottom, var(--sunset-orange), var(--forest-green));
-        }
-
-        .timeline-item {
-            position: relative;
-            margin-bottom: 1.5rem;
-            padding-left: 1.5rem;
-        }
-
-        .timeline-item::before {
-            content: '';
-            position: absolute;
-            left: -2rem;
-            top: 0.3rem;
-            width: 12px;
-            height: 12px;
-            background: var(--sunset-orange);
-            border-radius: 50%;
-            border: 3px solid white;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-        }
-
-        .timeline-time {
-            display: inline-block;
-            font-weight: 700;
-            color: var(--sunset-orange);
-            font-size: 0.95rem;
-            margin-bottom: 0.3rem;
-            font-family: 'DM Sans', monospace;
-        }
-
-        .timeline-content {
-            background: var(--soft-cream);
-            padding: 1rem;
-            border-radius: 12px;
-            margin-top: 0.3rem;
-        }
-
-        .timeline-name {
-            font-weight: 700;
-            color: var(--text-dark);
-            font-size: 1.05rem;
-            margin-bottom: 0.5rem;
-        }
-
-        .duration-badge {
-            display: inline-block;
-            padding: 0.3rem 0.8rem;
-            background: var(--forest-green);
-            color: white;
-            border-radius: 12px;
-            font-size: 0.75rem;
-            margin-left: 0.5rem;
-            font-weight: 600;
-        }
-
-        .timeline-desc {
-            color: var(--text-light);
-            font-size: 0.9rem;
-            line-height: 1.5;
-            margin-top: 0.5rem;
-        }
-
-        /* Food recommendations */
-        .food-items {
-            display: flex;
-            flex-direction: column;
-            gap: 1.5rem;
-        }
-
-        .food-item {
-            background: linear-gradient(135deg, #FFF5EB 0%, #FFE5D9 100%);
-            border-radius: 15px;
-            padding: 1.5rem;
-            border-left: 4px solid var(--forest-green);
-        }
-
-        .food-header {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            flex-wrap: wrap;
-            margin-bottom: 1rem;
-        }
-
-        .meal-type-badge {
-            padding: 0.4rem 1rem;
-            background: var(--sunset-orange);
-            color: white;
-            border-radius: 20px;
-            font-size: 0.85rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .food-time {
-            font-weight: 700;
-            color: var(--deep-teal);
-            font-family: 'DM Sans', monospace;
-        }
-
-        .price-badge {
-            padding: 0.3rem 0.7rem;
-            background: var(--forest-green);
-            color: white;
-            border-radius: 10px;
-            font-size: 0.8rem;
-            font-weight: 600;
-        }
-
-        .restaurant-name {
-            font-weight: 700;
-            color: var(--deep-teal);
-            font-size: 1.1rem;
-            margin-bottom: 0.5rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .restaurant-location {
-            color: var(--text-light);
-            font-size: 0.85rem;
-            margin-bottom: 1rem;
-            font-style: italic;
-        }
-
-        .dishes-list {
-            background: white;
-            padding: 1rem;
-            border-radius: 12px;
-            margin-top: 0.8rem;
-        }
-
-        .dishes-list strong {
-            color: var(--deep-teal);
-            display: block;
-            margin-bottom: 0.8rem;
-        }
-
-        .dishes-list ul {
-            list-style: none;
-            padding-left: 0;
-        }
-
-        .dishes-list li {
-            padding: 0.6rem 0;
-            border-bottom: 1px solid rgba(0,0,0,0.05);
-        }
-
-        .dishes-list li:last-child {
-            border-bottom: none;
-        }
-
-        .dish-name {
-            font-weight: 700;
-            color: var(--text-dark);
-            font-size: 1rem;
-        }
-
-        .dish-description {
-            color: var(--text-light);
-            font-size: 0.85rem;
-            margin-top: 0.2rem;
-            line-height: 1.4;
-        }
-
-        .food-desc {
-            color: var(--text-light);
-            font-size: 0.9rem;
-            line-height: 1.5;
-            margin-top: 0.8rem;
-            font-style: italic;
-        }
-
-        .travel-tips {
-            background: linear-gradient(135deg, rgba(255,107,53,0.1), rgba(0,78,100,0.1));
-            border-radius: 20px;
-            padding: 2rem;
-            margin-top: 2rem;
-        }
-
-        .tips-title {
-            font-family: 'Playfair Display', serif;
-            font-size: 1.8rem;
-            color: var(--deep-teal);
-            margin-bottom: 1rem;
-            font-weight: 700;
-        }
-
-        .tips-list {
-            list-style: none;
-            padding: 0;
-        }
-
-        .tips-list li {
-            padding: 0.8rem 0;
-            padding-left: 2rem;
-            position: relative;
-            color: var(--text-dark);
-            line-height: 1.6;
-        }
-
-        .tips-list li::before {
-            content: '✦';
-            position: absolute;
-            left: 0;
-            color: var(--sunset-orange);
-            font-size: 1.2rem;
-        }
-
-        .error-message {
-            background: #FFE5E5;
-            border: 2px solid #FF6B6B;
-            border-radius: 15px;
-            padding: 1rem 1.5rem;
-            margin-top: 1rem;
-            color: #C92A2A;
-            display: none;
-        }
-
-        .error-message.show {
-            display: block;
-            animation: fadeInDown 0.3s ease-out;
-        }
-
-        @keyframes fadeInDown {
-            from {
-                opacity: 0;
-                transform: translateY(-30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        @keyframes fadeInLeft {
-            from {
-                opacity: 0;
-                transform: translateX(-30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateX(0);
-            }
-        }
-
-        @keyframes fadeInRight {
-            from {
-                opacity: 0;
-                transform: translateX(30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateX(0);
-            }
-        }
-
-        .fade-in {
-            animation: fadeInDown 0.6s ease-out;
-        }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="container">
@@ -804,45 +33,97 @@
 
                 <!-- Instagram Reel Mode -->
                 <div id="instagramMode" class="mode-content active">
-                    <div class="url-input-section">
-                        <div class="url-input-label">
-                            📷 Paste Instagram Reel URL
+                    
+                    <!-- Step Indicator -->
+                    <div class="step-indicator">
+                        <div class="step-dot active" id="stepDot1">1</div>
+                        <div style="display:flex;flex-direction:column;align-items:center;flex:1;gap:2px;">
+                            <div class="step-line" id="stepLine1"></div>
                         </div>
-                        <div class="url-input-wrapper">
-                            <span class="url-input-icon">🔗</span>
-                            <input 
-                                type="text" 
-                                id="reelUrl" 
-                                class="url-input"
-                                placeholder="https://www.instagram.com/reel/ABC123/"
-                            />
+                        <div class="step-dot pending" id="stepDot2">2</div>
+                        <div style="display:flex;flex-direction:column;align-items:center;flex:1;gap:2px;">
+                            <div class="step-line" id="stepLine2"></div>
                         </div>
-                        <p class="url-helper-text">
-                            📱 Paste any public Instagram travel reel URL and we'll extract the itinerary for you!
-                        </p>
+                        <div class="step-dot pending" id="stepDot3">3</div>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;margin-top:-1rem;margin-bottom:1.5rem;">
+                        <span class="step-label">Paste URL</span>
+                        <span class="step-label">Select Places</span>
+                        <span class="step-label">Your Itinerary</span>
                     </div>
 
-                    <!-- Optional Override Fields -->
-                    <div class="optional-fields">
-                        <div class="form-group">
-                            <label>Duration (Optional)</label>
-                            <input type="number" id="reelDuration" min="1" max="30" placeholder="Auto-detect">
+                    <!-- STEP 1: URL Input -->
+                    <div id="step1Panel">
+                        <div class="url-input-section">
+                            <div class="url-input-label">
+                                📷 Paste Instagram Reel URL
+                            </div>
+                            <div class="url-input-wrapper">
+                                <span class="url-input-icon">🔗</span>
+                                <input 
+                                    type="text" 
+                                    id="reelUrl" 
+                                    class="url-input"
+                                    placeholder="https://www.instagram.com/reel/ABC123/"
+                                />
+                            </div>
+                            <p class="url-helper-text">
+                                📱 Paste any public Instagram travel reel and we'll extract the places for you to pick from!
+                            </p>
                         </div>
-                        <div class="form-group">
-                            <label>Budget Level (Optional)</label>
-                            <select id="reelBudget">
-                                <option value="">Auto-detect</option>
-                                <option value="budget">Budget</option>
-                                <option value="mid-range">Mid-Range</option>
-                                <option value="luxury">Luxury</option>
-                            </select>
-                        </div>
+
+                        <button type="button" id="extractPlacesBtn" class="extract-btn">
+                            <span id="extractBtnText">🔍 Extract Places from Reel</span>
+                            <div class="loading-spinner" id="extractSpinner" style="display:none;"></div>
+                        </button>
+                        <div class="error-message" id="reelErrorMessage"></div>
                     </div>
 
-                    <button type="button" id="generateFromReel" class="generate-btn">
-                        <span id="reelButtonText">🚀 Generate from Reel</span>
-                        <div class="loading-spinner" id="reelSpinner"></div>
-                    </button>
+                    <!-- STEP 2: Place Selection -->
+                    <div id="step2Panel" class="places-extraction-panel">
+                        <button class="back-btn" id="backToStep1Btn">← Back to URL</button>
+
+                        <div class="extraction-info" id="extractionInfo">
+                            <!-- Populated dynamically -->
+                        </div>
+
+                        <p class="inferred-note">✦ Some places are inferred from hashtags & context — uncheck any you don't want</p>
+
+                        <div class="selection-summary">
+                            <span class="selection-count" id="selectionCount">0 places selected</span>
+                            <div class="selection-actions">
+                                <button class="select-all-btn" onclick="selectAllPlaces()">Select All</button>
+                                <button class="clear-btn" onclick="clearAllPlaces()">Clear</button>
+                            </div>
+                        </div>
+
+                        <div class="places-grid" id="placesGrid">
+                            <!-- Place cards rendered by JS -->
+                        </div>
+
+                        <!-- Optional Overrides -->
+                        <div class="optional-fields" style="margin-top:1rem;">
+                            <div class="form-group">
+                                <label>Duration (Optional)</label>
+                                <input type="number" id="reelDuration" min="1" max="30" placeholder="Auto-detect">
+                            </div>
+                            <div class="form-group">
+                                <label>Budget Level (Optional)</label>
+                                <select id="reelBudget">
+                                    <option value="">Auto-detect</option>
+                                    <option value="budget">Budget</option>
+                                    <option value="mid-range">Mid-Range</option>
+                                    <option value="luxury">Luxury</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <button type="button" id="generateFromReel" class="generate-btn" disabled>
+                            <span id="reelButtonText">🚀 Generate Itinerary</span>
+                            <div class="loading-spinner" id="reelSpinner" style="display:none;"></div>
+                        </button>
+                        <p style="text-align:center;color:var(--text-light);font-size:0.82rem;margin-top:0.7rem;" id="selectionHint">Select at least one place to continue</p>
+                    </div>
                 </div>
 
                 <!-- Manual Entry Mode -->
@@ -960,7 +241,8 @@
         // ============================================
         // 🔧 CONFIGURATION - Update this for deployment
         // ============================================
-        const API_URL = 'https://trailbuddy.onrender.com';
+        //const API_URL = 'https://trailbuddy.onrender.com';
+        const API_URL = 'http://localhost:8000';
         
         // ============================================
         // MODE SWITCHING
@@ -984,61 +266,240 @@
         });
 
         // ============================================
-        // INSTAGRAM REEL HANDLING
+        // INSTAGRAM REEL — TWO-STEP FLOW
         // ============================================
-        document.getElementById('generateFromReel').addEventListener('click', async function() {
+
+        let extractedReelUrl = '';
+        let extractedPlaces = [];
+        let selectedPlaceNames = new Set();
+        let cachedReelData = null;  // Stores reel data from Step 1 to avoid re-fetching
+
+        const PLACE_TYPE_ICONS = {
+            city: '🏙️',
+            attraction: '🗺️',
+            food: '🍽️',
+            stay: '🏨',
+            activity: '🎯',
+            region: '🌄'
+        };
+
+        // ---- STEP 1: Extract Places ----
+        document.getElementById('extractPlacesBtn').addEventListener('click', async function () {
             const reelUrl = document.getElementById('reelUrl').value.trim();
-            const durationOverride = document.getElementById('reelDuration').value;
-            const budgetLevel = document.getElementById('reelBudget').value;
-            
+            const errorMsg = document.getElementById('reelErrorMessage');
+            errorMsg.classList.remove('show');
+
             if (!reelUrl) {
-                showError('Please enter an Instagram reel URL');
+                showReelError('Please enter an Instagram reel URL');
                 return;
             }
-            
-            // Validate URL format
             if (!reelUrl.includes('instagram.com/reel/') && !reelUrl.includes('instagram.com/p/')) {
-                showError('Please enter a valid Instagram reel URL');
+                showReelError('Please enter a valid Instagram reel URL');
                 return;
             }
-            
+
             const btn = this;
-            const btnText = document.getElementById('reelButtonText');
-            const spinner = document.getElementById('reelSpinner');
-            
-            // Show loading
+            const btnText = document.getElementById('extractBtnText');
+            const spinner = document.getElementById('extractSpinner');
+
             btn.disabled = true;
             btnText.style.display = 'none';
             spinner.style.display = 'block';
-            
+
             try {
-                const payload = { reel_url: reelUrl };
+                const response = await fetch(`${API_URL}/extract-places-from-reel`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ reel_url: reelUrl })
+                });
+
+                const result = await response.json();
+
+                if (!response.ok || !result.success) {
+                    throw new Error(result.detail || 'Failed to extract places');
+                }
+
+                extractedReelUrl = reelUrl;
+                extractedPlaces = result.places || [];
+                cachedReelData = result.cached_reel_data || null;  // Cache for Step 2
+                
+                // Pre-select all places
+                selectedPlaceNames = new Set(extractedPlaces.map(p => p.name));
+
+                renderPlacesStep(result);
+                goToStep2();
+
+            } catch (error) {
+                console.error('Extraction error:', error);
+                showReelError(error.message || 'Failed to extract places. Please try again.');
+            } finally {
+                btn.disabled = false;
+                btnText.style.display = 'flex';
+                spinner.style.display = 'none';
+            }
+        });
+
+        function renderPlacesStep(result) {
+            // Info banner
+            document.getElementById('extractionInfo').innerHTML = `
+                <strong>📍 ${result.destination}${result.country ? ', ' + result.country : ''}</strong>
+                We found <strong>${result.places.length} places</strong> from this reel. 
+                Select the ones you want included in your itinerary.
+            `;
+
+            // Render place cards
+            const grid = document.getElementById('placesGrid');
+            grid.innerHTML = extractedPlaces.map(place => {
+                const icon = PLACE_TYPE_ICONS[place.type] || '📌';
+                const typeLabel = place.type || 'place';
+                return `
+                    <div class="place-card selected" data-name="${escapeAttr(place.name)}" onclick="togglePlace(this, '${escapeAttr(place.name)}')">
+                        <div class="place-check">✓</div>
+                        <span class="place-type-icon">${icon}</span>
+                        <div class="place-type-badge type-${place.type || 'attraction'}">${typeLabel}</div>
+                        <div class="place-card-name">${place.name}</div>
+                        ${place.description ? `<div class="place-card-desc">${place.description}</div>` : ''}
+                    </div>
+                `;
+            }).join('');
+
+            updateSelectionCount();
+        }
+
+        function togglePlace(card, name) {
+            card.classList.toggle('selected');
+            if (card.classList.contains('selected')) {
+                selectedPlaceNames.add(name);
+            } else {
+                selectedPlaceNames.delete(name);
+            }
+            updateSelectionCount();
+        }
+
+        function selectAllPlaces() {
+            document.querySelectorAll('.place-card').forEach(card => {
+                card.classList.add('selected');
+                selectedPlaceNames.add(card.dataset.name);
+            });
+            updateSelectionCount();
+        }
+
+        function clearAllPlaces() {
+            document.querySelectorAll('.place-card').forEach(card => {
+                card.classList.remove('selected');
+            });
+            selectedPlaceNames.clear();
+            updateSelectionCount();
+        }
+
+        function updateSelectionCount() {
+            const count = selectedPlaceNames.size;
+            document.getElementById('selectionCount').textContent = 
+                `${count} place${count !== 1 ? 's' : ''} selected`;
+            
+            const btn = document.getElementById('generateFromReel');
+            const hint = document.getElementById('selectionHint');
+            if (count > 0) {
+                btn.disabled = false;
+                hint.style.display = 'none';
+            } else {
+                btn.disabled = true;
+                hint.style.display = 'block';
+            }
+        }
+
+        function goToStep2() {
+            document.getElementById('step1Panel').style.display = 'none';
+            document.getElementById('step2Panel').classList.add('show');
+            // Update step indicator
+            document.getElementById('stepDot1').className = 'step-dot done';
+            document.getElementById('stepDot1').textContent = '✓';
+            document.getElementById('stepLine1').classList.add('done');
+            document.getElementById('stepDot2').className = 'step-dot active';
+        }
+
+        function goToStep1() {
+            document.getElementById('step1Panel').style.display = 'block';
+            document.getElementById('step2Panel').classList.remove('show');
+            cachedReelData = null;  // Clear cache so a fresh URL fetch can happen
+            // Reset step indicator
+            document.getElementById('stepDot1').className = 'step-dot active';
+            document.getElementById('stepDot1').textContent = '1';
+            document.getElementById('stepLine1').classList.remove('done');
+            document.getElementById('stepDot2').className = 'step-dot pending';
+        }
+
+        document.getElementById('backToStep1Btn').addEventListener('click', goToStep1);
+
+        // ---- STEP 2 → 3: Generate Itinerary ----
+        document.getElementById('generateFromReel').addEventListener('click', async function () {
+            const durationOverride = document.getElementById('reelDuration').value;
+            const budgetLevel = document.getElementById('reelBudget').value;
+            const selected = Array.from(selectedPlaceNames);
+
+            const btn = this;
+            const btnText = document.getElementById('reelButtonText');
+            const spinner = document.getElementById('reelSpinner');
+
+            btn.disabled = true;
+            btnText.style.display = 'none';
+            spinner.style.display = 'block';
+
+            // Update step indicator to step 3 loading
+            document.getElementById('stepDot2').className = 'step-dot done';
+            document.getElementById('stepDot2').textContent = '✓';
+            document.getElementById('stepLine2').classList.add('done');
+            document.getElementById('stepDot3').className = 'step-dot active';
+
+            try {
+                const payload = {
+                    reel_url: extractedReelUrl,
+                    selected_places: selected,
+                    cached_reel_data: cachedReelData  // Reuse Step 1 data — no Apify re-call
+                };
                 if (durationOverride) payload.duration_override = parseInt(durationOverride);
                 if (budgetLevel) payload.budget_level = budgetLevel;
-                
+
                 const response = await fetch(`${API_URL}/generate-from-reel`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
-                
+
                 const result = await response.json();
-                
+
                 if (result.success) {
                     displayItinerary(result.data, result.reel_data);
+                    // Scroll to results
+                    document.querySelector('.results-section').scrollIntoView({ behavior: 'smooth' });
                 } else {
                     throw new Error(result.detail || 'Failed to generate itinerary');
                 }
             } catch (error) {
-                console.error('Error:', error);
-                showError(error.message || 'An error occurred. Please try again.');
+                console.error('Generation error:', error);
+                showReelError(error.message || 'An error occurred. Please try again.');
+                // Revert step 3 indicator
+                document.getElementById('stepDot3').className = 'step-dot pending';
+                document.getElementById('stepLine2').classList.remove('done');
+                document.getElementById('stepDot2').className = 'step-dot active';
+                document.getElementById('stepDot2').textContent = '2';
             } finally {
-                // Reset button
-                btn.disabled = false;
+                btn.disabled = selectedPlaceNames.size === 0;
                 btnText.style.display = 'inline';
                 spinner.style.display = 'none';
             }
         });
+
+        function showReelError(message) {
+            const errorMsg = document.getElementById('reelErrorMessage');
+            errorMsg.textContent = message;
+            errorMsg.classList.add('show');
+            setTimeout(() => errorMsg.classList.remove('show'), 6000);
+        }
+
+        function escapeAttr(str) {
+            return str.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        }
         
         // ============================================
         // MANUAL FORM HANDLING

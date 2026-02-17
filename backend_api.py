@@ -75,6 +75,12 @@ class ReelRequest(BaseModel):
     reel_url: str
     duration_override: Optional[int] = None
     budget_level: Optional[str] = None
+    selected_places: Optional[List[str]] = None   # Places chosen by user after extraction
+    cached_reel_data: Optional[dict] = None        # Pre-fetched reel data from Step 1 — skips Apify
+
+class ExtractPlacesRequest(BaseModel):
+    """Request model for extracting places from a reel"""
+    reel_url: str
 
 # --------------------------------------------------
 # UTILITY FUNCTIONS
@@ -349,11 +355,86 @@ def extract_reel_data(reel_url: str) -> dict:
         raise HTTPException(status_code=500, detail=f"Failed to extract reel data: {str(e)}")
 
 # --------------------------------------------------
+# EXTRACT PLACES FROM REEL DATA
+# --------------------------------------------------
+
+def extract_places_from_reel_data(reel_data: dict) -> dict:
+    """Use LLM to extract a list of places/cities/landmarks from reel caption & hashtags"""
+
+    caption = reel_data.get("caption", "")
+    hashtags = reel_data.get("hashtags", [])
+    location = reel_data.get("location", "")
+
+    hashtag_text = " ".join([f"#{tag}" for tag in hashtags])
+    full_text = f"{caption}\n\nHashtags: {hashtag_text}"
+    if location:
+        full_text += f"\n\nLocation tag: {location}"
+
+    PROMPT = f"""
+You are a travel data extraction expert. Analyze the Instagram Reel content below and extract every place mentioned or implied.
+
+INSTAGRAM REEL CONTENT:
+{full_text}
+
+TASK:
+Return a JSON object with:
+1. "destination" - the main city/region/country of the trip (string)
+2. "places" - an exhaustive list of specific places found in the content. Include:
+   - Cities or regions
+   - Specific attractions, landmarks, beaches, temples, viewpoints
+   - Restaurants, cafés, hotels if mentioned
+   - Activity spots (e.g. "Rishikesh rafting point", "Bali rice terraces")
+
+Each place object must follow this schema:
+{{
+  "name": "string (place name)",
+  "type": "city | attraction | food | stay | activity | region",
+  "description": "string (1 short sentence about what this place is)",
+  "inferred": true | false  (true if you inferred it from context, false if explicitly mentioned)
+}}
+
+Return ONLY valid JSON. No markdown. No extra text.
+
+{{
+  "destination": "string",
+  "country": "string",
+  "places": [ ... ]
+}}
+"""
+
+    try:
+        response = openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a travel data extractor. Return ONLY valid JSON. No markdown."
+                },
+                {"role": "user", "content": PROMPT}
+            ],
+            temperature=0.3,
+        )
+
+        content = response.choices[0].message.content.strip()
+        result = extract_json(content)
+
+        print(f"✅ Extracted {len(result.get('places', []))} places for {result.get('destination')}")
+        return result
+
+    except json.JSONDecodeError as e:
+        print(f"❌ JSON parse error in place extraction: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to parse places from LLM response")
+    except Exception as e:
+        print(f"❌ Place extraction LLM error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to extract places: {str(e)}")
+
+
+# --------------------------------------------------
 # INSTAGRAM REEL ITINERARY GENERATION
 # --------------------------------------------------
 
-def generate_reel_itinerary(reel_data: dict, duration_override: Optional[int] = None, budget_level: Optional[str] = None) -> dict:
-    """Generate travel itinerary from Instagram caption and hashtags"""
+def generate_reel_itinerary(reel_data: dict, duration_override: Optional[int] = None, budget_level: Optional[str] = None, selected_places: Optional[List[str]] = None) -> dict:
+    """Generate travel itinerary from Instagram caption, hashtags, and user-selected places"""
     
     caption = reel_data.get("caption", "")
     hashtags = reel_data.get("hashtags", [])
@@ -363,7 +444,22 @@ def generate_reel_itinerary(reel_data: dict, duration_override: Optional[int] = 
     full_text = f"{caption}\n\nHashtags: {hashtag_text}"
     if location:
         full_text += f"\n\nLocation tag: {location}"
-    
+
+    # Build selected places constraint
+    places_constraint = ""
+    if selected_places and len(selected_places) > 0:
+        places_list = ", ".join(selected_places)
+        places_constraint = f"""
+SELECTED PLACES (USER CHOSE THESE - MUST INCLUDE ALL OF THEM):
+The user has specifically selected these places to visit: {places_list}
+- Build the entire itinerary around these selected places
+- Distribute these places across days logically (by proximity or theme)
+- Every selected place MUST appear in at least one day's activities
+- You may add complementary nearby spots to fill the day naturally
+"""
+    else:
+        places_constraint = "- Infer key places from the reel content"
+
     PROMPT = f"""
 You are a travel expert analyzing an Instagram Reel to extract a detailed travel itinerary.
 
@@ -381,6 +477,7 @@ Extract and infer the following information:
 ADDITIONAL CONSTRAINTS:
 {f"- User specified trip duration: {duration_override} days" if duration_override else "- Infer trip duration from content"}
 {f"- User specified budget level: {budget_level}" if budget_level else "- Infer budget level from content"}
+{places_constraint}
 
 OUTPUT REQUIREMENTS:
 Return ONLY a valid JSON object (no markdown, no explanations) with this exact structure:
@@ -538,18 +635,64 @@ async def create_manual_itinerary(request: ManualItineraryRequest):
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/extract-places-from-reel")
+async def extract_places(request: ExtractPlacesRequest):
+    """Step 1: Extract places/cities from Instagram reel URL for user selection"""
+    try:
+        # Extract raw reel data
+        reel_data = extract_reel_data(request.reel_url)
+        
+        # Extract places using LLM
+        places_result = extract_places_from_reel_data(reel_data)
+        
+        return {
+            "success": True,
+            "reel_data": {
+                "url": reel_data["url"],
+                "caption": reel_data["caption"][:300] + "..." if len(reel_data["caption"]) > 300 else reel_data["caption"],
+                "hashtags": reel_data["hashtags"],
+                "location": reel_data["location"]
+            },
+            # Full reel_data sent back so frontend can pass it to /generate-from-reel
+            # This avoids a second Apify call in Step 2
+            "cached_reel_data": {
+                "url": reel_data["url"],
+                "caption": reel_data["caption"],
+                "hashtags": reel_data["hashtags"],
+                "location": reel_data["location"],
+                "likes": reel_data.get("likes", 0)
+            },
+            "destination": places_result.get("destination", ""),
+            "country": places_result.get("country", ""),
+            "places": places_result.get("places", [])
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print("❌ ERROR IN /extract-places-from-reel")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/generate-from-reel")
 async def create_reel_itinerary(request: ReelRequest):
     """Generate a travel itinerary from Instagram reel URL"""
     try:
-        # Step 1: Extract reel data
-        reel_data = extract_reel_data(request.reel_url)
-        
-        # Step 2: Generate itinerary
+        # Step 1: Use cached reel data from Step 1 if available — avoids redundant Apify call
+        if request.cached_reel_data:
+            print(f"✅ Using cached reel data — skipping Apify")
+            reel_data = request.cached_reel_data
+        else:
+            print(f"🔍 No cached data — fetching from Apify")
+            reel_data = extract_reel_data(request.reel_url)
+
+        # Step 2: Generate itinerary (uses selected_places if provided)
         itinerary = generate_reel_itinerary(
             reel_data,
             duration_override=request.duration_override,
-            budget_level=request.budget_level
+            budget_level=request.budget_level,
+            selected_places=request.selected_places
         )
         
         # Step 3: Return combined result
