@@ -1,6 +1,6 @@
 """
 Storage Backend Abstraction Layer
-Supports multiple storage providers (Google Drive, S3, local, etc.)
+Supports: Supabase + Cloudflare R2, Local filesystem
 """
 
 import os
@@ -10,9 +10,6 @@ import hashlib
 from abc import ABC, abstractmethod
 from typing import Optional, Dict, Any, List
 from pathlib import Path
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 import io
 
 # Supabase and R2 (boto3 for S3-compatible API)
@@ -59,279 +56,6 @@ class StorageBackend(ABC):
     def get_video_url(self, reel_id: str) -> Optional[str]:
         """Get shareable URL for cached video"""
         pass
-
-
-# ==================================================
-# GOOGLE DRIVE IMPLEMENTATION
-# ==================================================
-
-class GoogleDriveStorage(StorageBackend):
-    """
-    Google Drive storage implementation
-    Stores reel data in folders: /TrailBuddy Cache/{reel_id}/
-    """
-    
-    def __init__(self, credentials_path: str = "google_credentials.json"):
-        """
-        Initialize Google Drive client
-        Args:
-            credentials_path: Path to service account JSON file
-        """
-        self.credentials_path = credentials_path
-        self.service = None
-        self.root_folder_id = None
-        self._initialize_drive()
-    
-    def _initialize_drive(self):
-        """Set up Google Drive API client"""
-        if not os.path.exists(self.credentials_path):
-            raise FileNotFoundError(
-                f"Google credentials not found at {self.credentials_path}. "
-                "Download service account JSON from Google Cloud Console."
-            )
-        
-        credentials = service_account.Credentials.from_service_account_file(
-            self.credentials_path,
-            scopes=['https://www.googleapis.com/auth/drive.file']
-        )
-        
-        self.service = build('drive', 'v3', credentials=credentials)
-        self.root_folder_id = self._get_or_create_root_folder()
-    
-    def _get_or_create_root_folder(self) -> str:
-        """Get or create 'TrailBuddy Cache' root folder"""
-        folder_name = "TrailBuddy Cache"
-        
-        # Search for existing folder
-        query = f"name='{folder_name}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
-        results = self.service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
-        items = results.get('files', [])
-        
-        if items:
-            return items[0]['id']
-        
-        # Create new folder
-        file_metadata = {
-            'name': folder_name,
-            'mimeType': 'application/vnd.google-apps.folder'
-        }
-        folder = self.service.files().create(body=file_metadata, fields='id').execute()
-        return folder.get('id')
-    
-    def _get_or_create_reel_folder(self, reel_id: str) -> str:
-        """Get or create folder for specific reel"""
-        query = f"name='{reel_id}' and '{self.root_folder_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false"
-        results = self.service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
-        items = results.get('files', [])
-        
-        if items:
-            return items[0]['id']
-        
-        # Create reel folder
-        file_metadata = {
-            'name': reel_id,
-            'mimeType': 'application/vnd.google-apps.folder',
-            'parents': [self.root_folder_id]
-        }
-        folder = self.service.files().create(body=file_metadata, fields='id').execute()
-        return folder.get('id')
-    
-    def exists(self, reel_id: str) -> bool:
-        """Check if metadata.json exists for this reel"""
-        try:
-            folder_id = self._get_or_create_reel_folder(reel_id)
-            query = f"name='metadata.json' and '{folder_id}' in parents and trashed=false"
-            results = self.service.files().list(q=query, fields='files(id)').execute()
-            return len(results.get('files', [])) > 0
-        except Exception as e:
-            print(f"❌ Error checking cache existence: {e}")
-            return False
-    
-    def get_metadata(self, reel_id: str) -> Optional[Dict[str, Any]]:
-        """Download and parse metadata.json"""
-        try:
-            folder_id = self._get_or_create_reel_folder(reel_id)
-            query = f"name='metadata.json' and '{folder_id}' in parents and trashed=false"
-            results = self.service.files().list(q=query, fields='files(id)').execute()
-            files = results.get('files', [])
-            
-            if not files:
-                return None
-            
-            file_id = files[0]['id']
-            request = self.service.files().get_media(fileId=file_id)
-            fh = io.BytesIO()
-            downloader = MediaIoBaseDownload(fh, request)
-            
-            done = False
-            while not done:
-                status, done = downloader.next_chunk()
-            
-            fh.seek(0)
-            return json.loads(fh.read().decode('utf-8'))
-            
-        except Exception as e:
-            print(f"❌ Error retrieving metadata: {e}")
-            return None
-    
-    def save_reel_data(self, reel_id: str, metadata: Dict[str, Any], video_path: Optional[str] = None) -> bool:
-        """Save metadata.json and optionally video.mp4 to Drive"""
-        try:
-            folder_id = self._get_or_create_reel_folder(reel_id)
-            
-            # Save metadata.json
-            metadata_content = json.dumps(metadata, indent=2)
-            file_metadata = {
-                'name': 'metadata.json',
-                'parents': [folder_id],
-                'mimeType': 'application/json'
-            }
-            
-            # Check if metadata already exists
-            query = f"name='metadata.json' and '{folder_id}' in parents and trashed=false"
-            results = self.service.files().list(q=query, fields='files(id)').execute()
-            existing_files = results.get('files', [])
-            
-            media = MediaIoBaseUpload(
-                io.BytesIO(metadata_content.encode('utf-8')),
-                mimetype='application/json',
-                resumable=True
-            )
-            
-            if existing_files:
-                # Update existing file
-                self.service.files().update(
-                    fileId=existing_files[0]['id'],
-                    media_body=media
-                ).execute()
-            else:
-                # Create new file
-                self.service.files().create(
-                    body=file_metadata,
-                    media_body=media,
-                    fields='id'
-                ).execute()
-            
-            # Save video if provided
-            if video_path and os.path.exists(video_path):
-                self._upload_video(folder_id, video_path)
-            
-            print(f"✅ Cached reel data for {reel_id} in Google Drive")
-            return True
-            
-        except Exception as e:
-            print(f"❌ Error saving to cache: {e}")
-            return False
-    
-    def _upload_video(self, folder_id: str, video_path: str):
-        """Upload video file to Drive folder"""
-        file_metadata = {
-            'name': 'video.mp4',
-            'parents': [folder_id],
-            'mimeType': 'video/mp4'
-        }
-        
-        # Check if video already exists
-        query = f"name='video.mp4' and '{folder_id}' in parents and trashed=false"
-        results = self.service.files().list(q=query, fields='files(id)').execute()
-        existing_files = results.get('files', [])
-        
-        media = MediaFileUpload(video_path, mimetype='video/mp4', resumable=True)
-        
-        if existing_files:
-            self.service.files().update(
-                fileId=existing_files[0]['id'],
-                media_body=media
-            ).execute()
-        else:
-            self.service.files().create(
-                body=file_metadata,
-                media_body=media,
-                fields='id'
-            ).execute()
-    
-    def get_video_url(self, reel_id: str) -> Optional[str]:
-        """Get shareable link for video (if exists)"""
-        try:
-            folder_id = self._get_or_create_reel_folder(reel_id)
-            query = f"name='video.mp4' and '{folder_id}' in parents and trashed=false"
-            results = self.service.files().list(q=query, fields='files(id)').execute()
-            files = results.get('files', [])
-            
-            if not files:
-                return None
-            
-            file_id = files[0]['id']
-            
-            # Make file publicly readable (optional - configure as needed)
-            permission = {
-                'type': 'anyone',
-                'role': 'reader'
-            }
-            self.service.permissions().create(fileId=file_id, body=permission).execute()
-            
-            return f"https://drive.google.com/file/d/{file_id}/view"
-            
-        except Exception as e:
-            print(f"❌ Error getting video URL: {e}")
-            return None
-
-
-# ==================================================
-# LOCAL FILESYSTEM IMPLEMENTATION (for development)
-# ==================================================
-
-class LocalFileStorage(StorageBackend):
-    """
-    Local filesystem storage (for testing without Google Drive)
-    Stores in ./cache/{reel_id}/
-    """
-    
-    def __init__(self, cache_dir: str = "./cache"):
-        self.cache_dir = Path(cache_dir)
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
-    
-    def _get_reel_dir(self, reel_id: str) -> Path:
-        """Get directory path for reel"""
-        reel_dir = self.cache_dir / reel_id
-        reel_dir.mkdir(exist_ok=True)
-        return reel_dir
-    
-    def exists(self, reel_id: str) -> bool:
-        metadata_path = self._get_reel_dir(reel_id) / "metadata.json"
-        return metadata_path.exists()
-    
-    def get_metadata(self, reel_id: str) -> Optional[Dict[str, Any]]:
-        metadata_path = self._get_reel_dir(reel_id) / "metadata.json"
-        if not metadata_path.exists():
-            return None
-        
-        with open(metadata_path, 'r') as f:
-            return json.load(f)
-    
-    def save_reel_data(self, reel_id: str, metadata: Dict[str, Any], video_path: Optional[str] = None) -> bool:
-        try:
-            reel_dir = self._get_reel_dir(reel_id)
-            
-            # Save metadata
-            with open(reel_dir / "metadata.json", 'w') as f:
-                json.dump(metadata, f, indent=2)
-            
-            # Copy video if provided
-            if video_path and os.path.exists(video_path):
-                import shutil
-                shutil.copy(video_path, reel_dir / "video.mp4")
-            
-            print(f"✅ Cached reel data for {reel_id} locally")
-            return True
-            
-        except Exception as e:
-            print(f"❌ Error saving to local cache: {e}")
-            return False
-    
-    def get_video_url(self, reel_id: str) -> Optional[str]:
-        video_path = self._get_reel_dir(reel_id) / "video.mp4"
-        return str(video_path) if video_path.exists() else None
 
 
 # ==================================================
@@ -610,6 +334,63 @@ class SupabaseR2Storage(StorageBackend):
 
 
 # ==================================================
+# LOCAL FILESYSTEM IMPLEMENTATION (for development)
+# ==================================================
+
+class LocalFileStorage(StorageBackend):
+    """
+    Local filesystem storage (for testing without cloud services)
+    Stores in ./cache/{reel_id}/
+    """
+    
+    def __init__(self, cache_dir: str = "./cache"):
+        self.cache_dir = Path(cache_dir)
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+    
+    def _get_reel_dir(self, reel_id: str) -> Path:
+        """Get directory path for reel"""
+        reel_dir = self.cache_dir / reel_id
+        reel_dir.mkdir(exist_ok=True)
+        return reel_dir
+    
+    def exists(self, reel_id: str) -> bool:
+        metadata_path = self._get_reel_dir(reel_id) / "metadata.json"
+        return metadata_path.exists()
+    
+    def get_metadata(self, reel_id: str) -> Optional[Dict[str, Any]]:
+        metadata_path = self._get_reel_dir(reel_id) / "metadata.json"
+        if not metadata_path.exists():
+            return None
+        
+        with open(metadata_path, 'r') as f:
+            return json.load(f)
+    
+    def save_reel_data(self, reel_id: str, metadata: Dict[str, Any], video_path: Optional[str] = None) -> bool:
+        try:
+            reel_dir = self._get_reel_dir(reel_id)
+            
+            # Save metadata
+            with open(reel_dir / "metadata.json", 'w') as f:
+                json.dump(metadata, f, indent=2)
+            
+            # Copy video if provided
+            if video_path and os.path.exists(video_path):
+                import shutil
+                shutil.copy(video_path, reel_dir / "video.mp4")
+            
+            print(f"✅ Cached reel data for {reel_id} locally")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Error saving to local cache: {e}")
+            return False
+    
+    def get_video_url(self, reel_id: str) -> Optional[str]:
+        video_path = self._get_reel_dir(reel_id) / "video.mp4"
+        return str(video_path) if video_path.exists() else None
+
+
+# ==================================================
 # STORAGE FACTORY
 # ==================================================
 
@@ -618,7 +399,7 @@ def get_storage_backend(storage_type: str = None) -> StorageBackend:
     Factory function to create storage backend
     
     Args:
-        storage_type: "google_drive", "supabase_r2", "local", or None (auto-detect from env)
+        storage_type: "supabase_r2" or "local" (auto-detect from env if None)
     
     Returns:
         StorageBackend instance
@@ -626,11 +407,7 @@ def get_storage_backend(storage_type: str = None) -> StorageBackend:
     if storage_type is None:
         storage_type = os.getenv("STORAGE_BACKEND", "local")
     
-    if storage_type == "google_drive":
-        credentials_path = os.getenv("GOOGLE_CREDENTIALS_PATH", "google_credentials.json")
-        return GoogleDriveStorage(credentials_path)
-    
-    elif storage_type == "supabase_r2":
+    if storage_type == "supabase_r2":
         return SupabaseR2Storage()
     
     elif storage_type == "local":
@@ -638,7 +415,7 @@ def get_storage_backend(storage_type: str = None) -> StorageBackend:
         return LocalFileStorage(cache_dir)
     
     else:
-        raise ValueError(f"Unknown storage backend: {storage_type}. Choose: google_drive, supabase_r2, local")
+        raise ValueError(f"Unknown storage backend: {storage_type}. Choose: supabase_r2, local")
 
 
 # ==================================================
