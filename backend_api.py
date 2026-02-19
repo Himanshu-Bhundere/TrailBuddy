@@ -6,6 +6,7 @@ Supports both manual input and Instagram Reel URL extraction
 import os
 import json
 import traceback
+import tempfile
 from dotenv import load_dotenv
 from openai import OpenAI
 from fastapi import FastAPI, HTTPException
@@ -13,6 +14,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 from apify_client import ApifyClient
+
+# Import storage backend
+from storage_backend import (
+    get_storage_backend, 
+    extract_reel_id_from_url, 
+    download_video,
+    StorageBackend
+)
 
 # --------------------------------------------------
 # ENV SETUP
@@ -23,12 +32,20 @@ load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 APIFY_API_TOKEN = os.getenv("APIFY_API_TOKEN", "")  # Optional for manual mode
 
+
 if not OPENAI_API_KEY:
     raise RuntimeError("OPENAI_API_KEY not found in .env")
 
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
 apify_client = ApifyClient(APIFY_API_TOKEN) if APIFY_API_TOKEN else None
 
+# Initialize storage backend (Google Drive or local fallback)
+try:
+    storage: StorageBackend = get_storage_backend()
+    print(f"✅ Storage backend initialized: {storage.__class__.__name__}")
+except Exception as e:
+    print(f"⚠️ Storage backend initialization failed: {e}")
+    storage = None
 # --------------------------------------------------
 # FASTAPI APP
 # --------------------------------------------------
@@ -309,7 +326,17 @@ FINAL RULES (DO NOT BREAK)
 # --------------------------------------------------
 
 def extract_reel_data(reel_url: str) -> dict:
-    """Extract caption and hashtags from Instagram reel using Apify"""
+    """
+    Extract caption, hashtags, and video from Instagram reel
+    
+    Flow:
+    1. Extract reel ID from URL
+    2. Check storage cache first (using reel ID)
+    3. If not found, fetch from Apify (includes video URL)
+    4. Download video to temp location
+    5. Store everything in cache (metadata + video)
+    6. Return data
+    """
     
     if not apify_client:
         raise HTTPException(
@@ -317,6 +344,26 @@ def extract_reel_data(reel_url: str) -> dict:
             detail="Apify integration not configured. Please add APIFY_API_TOKEN to .env file."
         )
     
+    # Extract reel ID for cache lookup
+    reel_id = extract_reel_id_from_url(reel_url)
+    print(f"🔍 Reel ID: {reel_id}")
+    
+    # ========== STEP 1: Check cache first ==========
+    if storage and storage.exists(reel_id):
+        print(f"✅ Cache HIT — loading from storage")
+        cached_metadata = storage.get_metadata(reel_id)
+        
+        if cached_metadata:
+            # Add cache indicator for debugging
+            cached_metadata["_from_cache"] = True
+            cached_metadata["url"] = reel_url  # Ensure URL is set
+            return cached_metadata
+        else:
+            print(f"⚠️ Cache metadata corrupted, fetching fresh")
+    else:
+        print(f"❌ Cache MISS — fetching from Apify")
+    
+    # ========== STEP 2: Fetch from Apify ==========
     print(f"🔍 Extracting data from: {reel_url}")
     
     run_input = {
@@ -336,17 +383,57 @@ def extract_reel_data(reel_url: str) -> dict:
         
         reel_data = items[0]
         
+        # Extract all metadata
         extracted = {
             "url": reel_url,
+            "reel_id": reel_id,
             "caption": reel_data.get("caption", ""),
             "hashtags": reel_data.get("hashtags", []),
             "location": reel_data.get("locationName", ""),
             "likes": reel_data.get("likesCount", 0),
-            "raw_data": reel_data
+            "timestamp": reel_data.get("timestamp"),
+            "owner_username": reel_data.get("ownerUsername", ""),
+            "video_url": reel_data.get("videoUrl", ""),  # Direct video URL from Apify
+            "display_url": reel_data.get("displayUrl", ""),
+            "_from_cache": False
         }
         
-        print(f"✅ Extracted caption: {extracted['caption'][:100]}...")
+        print(f"✅ Extracted from Apify — caption: {extracted['caption'][:100]}...")
         print(f"✅ Found {len(extracted['hashtags'])} hashtags")
+        if extracted["video_url"]:
+            print(f"✅ Video URL available")
+        
+        # ========== STEP 3: Download and cache video (if available) ==========
+        video_path = None
+        if extracted["video_url"] and storage:
+            try:
+                # Download to temp file
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as tmp_file:
+                    video_path = tmp_file.name
+                
+                if download_video(extracted["video_url"], video_path):
+                    file_size_mb = os.path.getsize(video_path) / (1024*1024)
+                    print(f"✅ Video downloaded: {file_size_mb:.2f} MB")
+                else:
+                    video_path = None
+            except Exception as e:
+                print(f"⚠️ Video download failed: {e}")
+                video_path = None
+        
+        # ========== STEP 4: Save to cache ==========
+        if storage:
+            try:
+                storage.save_reel_data(reel_id, extracted, video_path)
+                print(f"💾 Cached reel data for future use")
+            except Exception as e:
+                print(f"⚠️ Cache save failed: {e}")
+        
+        # Clean up temp video file
+        if video_path and os.path.exists(video_path):
+            try:
+                os.unlink(video_path)
+            except:
+                pass
         
         return extracted
         
@@ -618,9 +705,12 @@ async def health():
         "status": "healthy",
         "openai_configured": bool(OPENAI_API_KEY),
         "apify_configured": bool(APIFY_API_TOKEN),
+        "storage_provider": STORAGE_PROVIDER if storage else "disabled",
+        "storage_active": storage is not None,
         "features": {
             "manual_generation": True,
-            "instagram_generation": bool(APIFY_API_TOKEN)
+            "instagram_generation": bool(APIFY_API_TOKEN),
+            "reel_caching": storage is not None
         }
     }
 
@@ -714,6 +804,38 @@ async def create_reel_itinerary(request: ReelRequest):
         print("❌ ERROR IN /generate-from-reel")
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/cache/clear")
+async def clear_cache(reel_url: Optional[str] = None):
+    """
+    Clear cached reel data
+    - If reel_url provided: Clear specific reel
+    - If no reel_url: Not implemented (would clear all)
+    """
+    if not storage:
+        raise HTTPException(status_code=503, detail="Storage provider not configured")
+    
+    if not reel_url:
+        return {
+            "success": False,
+            "message": "Specify reel_url to clear. Bulk clear not implemented."
+        }
+    
+    try:
+        deleted = storage.delete_reel_data(reel_url)
+        if deleted:
+            return {
+                "success": True,
+                "message": f"Cache cleared for: {reel_url}"
+            }
+        else:
+            return {
+                "success": False,
+                "message": "Reel not found in cache"
+            }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/debug/extract-reel")
 async def debug_extract_reel(request: ReelRequest):
