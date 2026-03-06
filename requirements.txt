@@ -6,7 +6,13 @@ pydantic>=2.6,<3
 apify-client==1.7.1
 requests==2.31.0
 
-# Supabase
+# Storage
 supabase==2.15.1
-# Cloudflare R2 (S3-compatible)
-boto3==1.35.80
+boto3==1.35.80          # Cloudflare R2 (S3-compatible)
+
+# Video processing
+# ⚠️  ffmpeg must be installed at OS level:
+#     Ubuntu/Debian  : sudo apt-get install -y ffmpeg
+#     macOS          : brew install ffmpeg
+#     Render.com     : add  buildCommand: apt-get install -y ffmpeg && pip install -r requirements.txt
+Pillow==10.3.0          # image resizing before sending to GPT-4o (optional optimisation)

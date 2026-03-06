@@ -8,143 +8,361 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700;900&family=DM+Sans:wght@400;500;700&family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+    <style>
+        /* ── Analysis Progress Panel ─────────────────────────────────────── */
+        .analysis-panel {
+            display: none;
+            background: rgba(255,255,255,0.9);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            padding: 2rem;
+            margin-top: 1.5rem;
+            border: 1px solid rgba(0,78,100,0.12);
+            box-shadow: 0 8px 40px rgba(0,0,0,0.08);
+            animation: fadeInDown 0.4s ease-out;
+        }
+        .analysis-panel.show { display: block; }
+
+        .panel-title {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.4rem;
+            color: var(--deep-teal);
+            font-weight: 700;
+            margin-bottom: 0.3rem;
+        }
+        .panel-subtitle {
+            font-size: 0.85rem;
+            color: var(--text-light);
+            margin-bottom: 1.5rem;
+        }
+
+        /* Progress bar */
+        .progress-bar-track {
+            width: 100%;
+            height: 8px;
+            background: rgba(0,78,100,0.08);
+            border-radius: 4px;
+            margin-bottom: 1.5rem;
+            overflow: hidden;
+        }
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--sunset-orange), var(--forest-green));
+            border-radius: 4px;
+            transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            width: 0%;
+        }
+
+        /* Step list */
+        .steps-list { display: flex; flex-direction: column; gap: 0.5rem; }
+
+        .step-row {
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+            padding: 0.65rem 0.9rem;
+            border-radius: 12px;
+            transition: background 0.25s;
+            font-size: 0.9rem;
+        }
+        .step-row.running  { background: rgba(255,107,53,0.07); }
+        .step-row.done     { background: rgba(37,161,142,0.07); }
+        .step-row.skipped  { background: rgba(0,0,0,0.03); opacity: 0.6; }
+        .step-row.failed   { background: rgba(200,42,42,0.07); }
+        .step-row.idle     { opacity: 0.4; }
+
+        .step-icon {
+            font-size: 1.1rem;
+            width: 1.5rem;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        .step-spinner {
+            width: 18px; height: 18px;
+            border: 2px solid rgba(255,107,53,0.25);
+            border-top-color: var(--sunset-orange);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            flex-shrink: 0;
+        }
+
+        .step-label {
+            font-weight: 600;
+            color: var(--text-dark);
+            min-width: 120px;
+            flex-shrink: 0;
+        }
+        .step-row.idle .step-label { color: var(--text-light); }
+        .step-row.done .step-label { color: var(--forest-green); }
+        .step-row.failed .step-label { color: #c0392b; }
+
+        .step-msg {
+            color: var(--text-light);
+            font-size: 0.82rem;
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .step-row.running .step-msg { color: var(--sunset-orange); }
+        .step-row.done    .step-msg { color: var(--forest-green); }
+
+        /* concurrent badge */
+        .concurrent-badge {
+            font-size: 0.65rem;
+            padding: 0.15rem 0.5rem;
+            background: rgba(0,78,100,0.08);
+            color: var(--deep-teal);
+            border-radius: 8px;
+            font-weight: 700;
+            flex-shrink: 0;
+            letter-spacing: 0.3px;
+        }
+
+        /* Video insights preview chips */
+        .insights-preview {
+            display: none;
+            margin-top: 1.2rem;
+            padding-top: 1.2rem;
+            border-top: 1px solid rgba(0,78,100,0.1);
+            animation: fadeInDown 0.4s ease-out;
+        }
+        .insights-preview.show { display: block; }
+        .insight-chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.8rem; }
+        .insight-chip {
+            display: inline-flex; align-items: center; gap: 0.35rem;
+            padding: 0.3rem 0.75rem;
+            background: white;
+            border: 1.5px solid rgba(0,78,100,0.15);
+            border-radius: 20px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: var(--deep-teal);
+        }
+        .insight-summary {
+            font-size: 0.84rem;
+            color: var(--text-dark);
+            line-height: 1.6;
+            background: linear-gradient(135deg, rgba(255,107,53,0.05), rgba(0,78,100,0.05));
+            border-radius: 12px;
+            padding: 0.9rem 1.1rem;
+            border-left: 3px solid var(--sunset-orange);
+        }
+        .audio-cues-row {
+            margin-top: 0.6rem;
+            font-size: 0.78rem;
+            color: var(--text-light);
+            font-style: italic;
+        }
+
+        /* Place selection (slides in after analysis) */
+        .place-selection-wrap {
+            display: none;
+            margin-top: 1.5rem;
+            animation: fadeInDown 0.5s ease-out;
+        }
+        .place-selection-wrap.show { display: block; }
+    </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1 class="logo">TrailBuddy</h1>
-            <p class="tagline">Your AI-Powered Journey Begins Here</p>
-        </header>
+<div class="container">
+    <header>
+        <h1 class="logo">TrailBuddy</h1>
+        <p class="tagline">Your AI-Powered Journey Begins Here</p>
+    </header>
 
-        <div class="main-grid">
-            <!-- Form Section -->
-            <div class="form-section">
-                <h2 class="section-title">Plan Your Journey</h2>
-                
-                <!-- Mode Switcher -->
-                <div class="mode-switcher">
-                    <button type="button" class="mode-tab active" data-mode="instagram">
-                        🎥 From Instagram Reel
-                    </button>
-                    <button type="button" class="mode-tab" data-mode="manual">
-                        ✍️ Manual Entry
-                    </button>
+    <div class="main-grid">
+        <!-- ════ FORM SECTION ════════════════════════════════════════════ -->
+        <div class="form-section">
+            <h2 class="section-title">Plan Your Journey</h2>
+
+            <!-- Mode tabs -->
+            <div class="mode-switcher">
+                <button type="button" class="mode-tab active" data-mode="instagram">🎥 From Instagram Reel</button>
+                <button type="button" class="mode-tab"        data-mode="manual">✍️ Manual Entry</button>
+            </div>
+
+            <!-- ── Instagram Mode ───────────────────────────────────────── -->
+            <div id="instagramMode" class="mode-content active">
+
+                <!-- Step indicator -->
+                <div class="step-indicator">
+                    <div class="step-dot active"  id="uiDot1">1</div>
+                    <div class="step-line"         id="uiLine1"></div>
+                    <div class="step-dot pending"  id="uiDot2">2</div>
+                    <div class="step-line"         id="uiLine2"></div>
+                    <div class="step-dot pending"  id="uiDot3">3</div>
+                </div>
+                <div style="display:flex;justify-content:space-between;margin-top:-1rem;margin-bottom:1.5rem;">
+                    <span class="step-label">Paste URL</span>
+                    <span class="step-label">Choose Places</span>
+                    <span class="step-label">Itinerary</span>
                 </div>
 
-                <!-- Instagram Reel Mode -->
-                <div id="instagramMode" class="mode-content active">
-                    
-                    <!-- Step Indicator -->
-                    <div class="step-indicator">
-                        <div class="step-dot active" id="stepDot1">1</div>
-                        <div style="display:flex;flex-direction:column;align-items:center;flex:1;gap:2px;">
-                            <div class="step-line" id="stepLine1"></div>
+                <!-- URL input panel (step 1) -->
+                <div id="urlPanel">
+                    <div class="url-input-section">
+                        <div class="url-input-label">📷 Paste Instagram Reel URL</div>
+                        <div class="url-input-wrapper">
+                            <span class="url-input-icon">🔗</span>
+                            <input type="text" id="reelUrl" class="url-input"
+                                   placeholder="https://www.instagram.com/reel/ABC123/"
+                                   autocomplete="off"/>
                         </div>
-                        <div class="step-dot pending" id="stepDot2">2</div>
-                        <div style="display:flex;flex-direction:column;align-items:center;flex:1;gap:2px;">
-                            <div class="step-line" id="stepLine2"></div>
-                        </div>
-                        <div class="step-dot pending" id="stepDot3">3</div>
-                    </div>
-                    <div style="display:flex;justify-content:space-between;margin-top:-1rem;margin-bottom:1.5rem;">
-                        <span class="step-label">Paste URL</span>
-                        <span class="step-label">Select Places</span>
-                        <span class="step-label">Your Itinerary</span>
+                        <p class="url-helper-text">
+                            📱 Paste any public travel reel — we'll analyse captions, video frames, and voiceover simultaneously.
+                        </p>
                     </div>
 
-                    <!-- STEP 1: URL Input -->
-                    <div id="step1Panel">
-                        <div class="url-input-section">
-                            <div class="url-input-label">
-                                📷 Paste Instagram Reel URL
-                            </div>
-                            <div class="url-input-wrapper">
-                                <span class="url-input-icon">🔗</span>
-                                <input 
-                                    type="text" 
-                                    id="reelUrl" 
-                                    class="url-input"
-                                    placeholder="https://www.instagram.com/reel/ABC123/"
-                                />
-                            </div>
-                            <p class="url-helper-text">
-                                📱 Paste any public Instagram travel reel and we'll extract the places for you to pick from!
-                            </p>
-                        </div>
+                    <button type="button" id="analyzeBtn" class="extract-btn">
+                        <span id="analyzeBtnText">🚀 Analyze Reel</span>
+                        <div class="loading-spinner" id="analyzeSpinner" style="display:none;"></div>
+                    </button>
+                    <div class="error-message" id="reelErrorMsg"></div>
+                </div>
 
-                        <button type="button" id="extractPlacesBtn" class="extract-btn">
-                            <span id="extractBtnText">🔍 Extract Places from Reel</span>
-                            <div class="loading-spinner" id="extractSpinner" style="display:none;"></div>
-                        </button>
-                        <div class="error-message" id="reelErrorMessage"></div>
+                <!-- ── Live analysis progress panel ────────────────────────── -->
+                <div class="analysis-panel" id="analysisPanel">
+                    <div class="panel-title" id="panelTitle">Analyzing your reel…</div>
+                    <div class="panel-subtitle" id="panelSubtitle">
+                        Fetching content · downloading video · analyzing frames & audio simultaneously
                     </div>
 
-                    <!-- STEP 2: Place Selection -->
-                    <div id="step2Panel" class="places-extraction-panel">
-                        <button class="back-btn" id="backToStep1Btn">← Back to URL</button>
+                    <!-- Progress bar -->
+                    <div class="progress-bar-track">
+                        <div class="progress-bar-fill" id="progressBar"></div>
+                    </div>
 
-                        <div class="extraction-info" id="extractionInfo">
-                            <!-- Populated dynamically -->
+                    <!-- Step rows -->
+                    <div class="steps-list">
+                        <!-- Format: data-step must match SSE step names -->
+                        <div class="step-row idle" data-step="cache_check">
+                            <span class="step-icon">🗄️</span>
+                            <span class="step-label">Cache Check</span>
+                            <span class="step-msg">Waiting…</span>
                         </div>
-
-                        <p class="inferred-note">✦ Some places are inferred from hashtags & context — uncheck any you don't want</p>
-
-                        <div class="selection-summary">
-                            <span class="selection-count" id="selectionCount">0 places selected</span>
-                            <div class="selection-actions">
-                                <button class="select-all-btn" onclick="selectAllPlaces()">Select All</button>
-                                <button class="clear-btn" onclick="clearAllPlaces()">Clear</button>
-                            </div>
+                        <div class="step-row idle" data-step="apify">
+                            <span class="step-icon">📷</span>
+                            <span class="step-label">Instagram Data</span>
+                            <span class="step-msg">Waiting…</span>
                         </div>
-
-                        <div class="places-grid" id="placesGrid">
-                            <!-- Place cards rendered by JS -->
+                        <div class="step-row idle" data-step="download">
+                            <span class="step-icon">⬇️</span>
+                            <span class="step-label">Video Download</span>
+                            <span class="step-msg">Waiting…</span>
                         </div>
-
-                        <!-- Optional Overrides -->
-                        <div class="optional-fields" style="margin-top:1rem;">
-                            <div class="form-group">
-                                <label>Duration (Optional)</label>
-                                <input type="number" id="reelDuration" min="1" max="30" placeholder="Auto-detect">
-                            </div>
-                            <div class="form-group">
-                                <label>Budget Level (Optional)</label>
-                                <select id="reelBudget">
-                                    <option value="">Auto-detect</option>
-                                    <option value="budget">Budget</option>
-                                    <option value="mid-range">Mid-Range</option>
-                                    <option value="luxury">Luxury</option>
-                                </select>
-                            </div>
+                        <!-- Concurrent group A: frames + audio -->
+                        <div class="step-row idle" data-step="frames">
+                            <span class="step-icon">🎞️</span>
+                            <span class="step-label">Frame Extraction</span>
+                            <span class="concurrent-badge">PARALLEL</span>
+                            <span class="step-msg">Waiting…</span>
                         </div>
+                        <div class="step-row idle" data-step="audio_extract">
+                            <span class="step-icon">🔊</span>
+                            <span class="step-label">Audio Extraction</span>
+                            <span class="concurrent-badge">PARALLEL</span>
+                            <span class="step-msg">Waiting…</span>
+                        </div>
+                        <!-- Concurrent group B: vision + whisper -->
+                        <div class="step-row idle" data-step="vision">
+                            <span class="step-icon">🔭</span>
+                            <span class="step-label">GPT-4o Vision</span>
+                            <span class="concurrent-badge">PARALLEL</span>
+                            <span class="step-msg">Waiting…</span>
+                        </div>
+                        <div class="step-row idle" data-step="whisper">
+                            <span class="step-icon">🎙️</span>
+                            <span class="step-label">Whisper STT</span>
+                            <span class="concurrent-badge">PARALLEL</span>
+                            <span class="step-msg">Waiting…</span>
+                        </div>
+                        <div class="step-row idle" data-step="consolidate">
+                            <span class="step-icon">🧩</span>
+                            <span class="step-label">Consolidation</span>
+                            <span class="step-msg">Waiting…</span>
+                        </div>
+                        <!-- Concurrent group C: save + upload -->
+                        <div class="step-row idle" data-step="save">
+                            <span class="step-icon">💾</span>
+                            <span class="step-label">Save to DB + R2</span>
+                            <span class="concurrent-badge">PARALLEL</span>
+                            <span class="step-msg">Waiting…</span>
+                        </div>
+                        <div class="step-row idle" data-step="places">
+                            <span class="step-icon">📍</span>
+                            <span class="step-label">Place Extraction</span>
+                            <span class="step-msg">Waiting…</span>
+                        </div>
+                    </div>
 
-                        <button type="button" id="generateFromReel" class="generate-btn" disabled>
-                            <span id="reelButtonText">🚀 Generate Itinerary</span>
-                            <div class="loading-spinner" id="reelSpinner" style="display:none;"></div>
-                        </button>
-                        <p style="text-align:center;color:var(--text-light);font-size:0.82rem;margin-top:0.7rem;" id="selectionHint">Select at least one place to continue</p>
+                    <!-- Video insights preview (appears when consolidation is done) -->
+                    <div class="insights-preview" id="insightsPreview">
+                        <div class="insight-chips" id="insightChips"></div>
+                        <div class="insight-summary" id="insightSummary"></div>
+                        <div class="audio-cues-row" id="audioCuesRow" style="display:none;"></div>
                     </div>
                 </div>
 
-                <!-- Manual Entry Mode -->
-                <div id="manualMode" class="mode-content">
-                
+                <!-- ── Place selection (step 2, shown after complete) ──────── -->
+                <div class="place-selection-wrap" id="placeSelectionWrap">
+                    <button class="back-btn" id="backBtn">← Analyse a different reel</button>
+
+                    <div class="extraction-info" id="extractionInfo"></div>
+                    <p class="inferred-note">✦ Some places are inferred — uncheck any you don't want included</p>
+
+                    <div class="selection-summary">
+                        <span class="selection-count" id="selectionCount">0 places selected</span>
+                        <div class="selection-actions">
+                            <button class="select-all-btn" onclick="selectAllPlaces()">Select All</button>
+                            <button class="clear-btn"      onclick="clearAllPlaces()">Clear</button>
+                        </div>
+                    </div>
+
+                    <div class="places-grid" id="placesGrid"></div>
+
+                    <div class="optional-fields" style="margin-top:1rem;">
+                        <div class="form-group">
+                            <label>Duration (optional)</label>
+                            <input type="number" id="reelDuration" min="1" max="30" placeholder="Auto-detect">
+                        </div>
+                        <div class="form-group">
+                            <label>Budget (optional)</label>
+                            <select id="reelBudget">
+                                <option value="">Auto-detect</option>
+                                <option value="budget">Budget</option>
+                                <option value="mid-range">Mid-Range</option>
+                                <option value="luxury">Luxury</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <button type="button" id="generateFromReel" class="generate-btn" disabled>
+                        <span id="reelBtnText">🚀 Generate Itinerary</span>
+                        <div class="loading-spinner" id="reelSpinner" style="display:none;"></div>
+                    </button>
+                    <p style="text-align:center;color:var(--text-light);font-size:0.82rem;margin-top:0.7rem;" id="selectionHint">
+                        Select at least one place to continue
+                    </p>
+                </div>
+            </div><!-- end instagram mode -->
+
+            <!-- ── Manual Mode ──────────────────────────────────────────── -->
+            <div id="manualMode" class="mode-content">
                 <form id="itineraryForm">
                     <div class="form-group">
-                        <label for="place">Destination</label>
-                        <input type="text" id="place" name="place" placeholder="e.g., Goa, India" required>
+                        <label>Destination</label>
+                        <input type="text" id="place" placeholder="e.g., Goa, India" required>
                     </div>
-
                     <div class="form-group">
-                        <label for="duration">Trip Duration (days)</label>
-                        <input type="number" id="duration" name="duration" min="1" max="30" value="4" required>
+                        <label>Trip Duration (days)</label>
+                        <input type="number" id="duration" min="1" max="30" value="4" required>
                     </div>
-
                     <div class="form-group">
-                        <label for="people">Number of Travelers</label>
-                        <input type="number" id="people" name="people" min="1" max="50" value="2" required>
+                        <label>Number of Travelers</label>
+                        <input type="number" id="people" min="1" max="50" value="2" required>
                     </div>
-
                     <div class="form-group">
                         <label>Travel Theme</label>
                         <div class="checkbox-group" id="themeOptions">
@@ -159,700 +377,665 @@
                             <span class="tag" data-value="Off-beat">Off-beat</span>
                         </div>
                     </div>
-
                     <div class="form-group">
-                        <label for="budget">Budget Level</label>
-                        <select id="budget" name="budget" required>
+                        <label>Budget Level</label>
+                        <select id="budget" required>
                             <option value="budget">Budget</option>
                             <option value="mid-range" selected>Mid-Range</option>
                             <option value="luxury">Luxury</option>
-                            <option value="mixed">Mixed</option>
                         </select>
                     </div>
-
                     <div class="form-group">
                         <label>Interests</label>
                         <div class="tag-input-container">
-                            <input type="text" id="interestInput" placeholder="Add interest (e.g., Photography)">
+                            <input type="text" id="interestInput" placeholder="Add interest">
                             <button type="button" class="add-tag-btn" onclick="addInterest()">Add</button>
                         </div>
                         <div class="tag-input-wrapper" id="interestTags"></div>
                     </div>
-
                     <div class="form-group">
-                        <label for="pace">Travel Pace</label>
-                        <select id="pace" name="pace" required>
+                        <label>Travel Pace</label>
+                        <select id="pace" required>
                             <option value="relaxed">Relaxed</option>
                             <option value="balanced" selected>Balanced</option>
                             <option value="fast-paced">Fast-Paced</option>
                         </select>
                     </div>
-
                     <div class="form-group">
-                        <label for="accommodation">Accommodation Preference</label>
-                        <input type="text" id="accommodation" name="accommodation" placeholder="e.g., Near Beach, City Center">
+                        <label>Accommodation Area</label>
+                        <input type="text" id="accommodation" placeholder="e.g., Near Beach, City Center">
                     </div>
-
                     <div class="form-group">
-                        <label for="transport">Transportation</label>
-                        <input type="text" id="transport" name="transport" placeholder="e.g., Scooter, Public Transport">
+                        <label>Transportation</label>
+                        <input type="text" id="transport" placeholder="e.g., Scooter, Public Transport">
                     </div>
-
                     <div class="form-group">
-                        <label for="food">Food Preferences</label>
-                        <input type="text" id="food" name="food" placeholder="e.g., Must-try local dishes, Vegetarian">
+                        <label>Food Preferences</label>
+                        <input type="text" id="food" placeholder="e.g., Must-try local dishes, Vegetarian">
                     </div>
-
                     <div class="form-group">
-                        <label for="constraints">Special Requests/Constraints</label>
-                        <textarea id="constraints" name="constraints" placeholder="e.g., No early mornings, Must visit specific place"></textarea>
+                        <label>Special Requests / Constraints</label>
+                        <textarea id="constraints" placeholder="e.g., No early mornings, Must visit a specific place"></textarea>
                     </div>
-
                     <div class="form-group">
-                        <label for="dates">Travel Dates/Season</label>
-                        <textarea id="dates" name="dates" placeholder="e.g., March 2026, During Holi festival"></textarea>
+                        <label>Travel Dates / Season</label>
+                        <textarea id="dates" placeholder="e.g., March 2026, During Diwali"></textarea>
                     </div>
-
-                    <button type="submit" class="generate-btn" id="generateBtn">
-                        <span id="btnText">Generate My Itinerary</span>
-                        <div class="loading-spinner" id="loadingSpinner"></div>
+                    <button type="submit" class="generate-btn" id="manualGenerateBtn">
+                        <span id="manualBtnText">Generate My Itinerary</span>
+                        <div class="loading-spinner" id="manualSpinner" style="display:none;"></div>
                     </button>
-
                     <div class="error-message" id="errorMessage"></div>
                 </form>
-                </div> <!-- End Manual Mode -->
             </div>
+        </div><!-- end form section -->
 
-            <!-- Results Section -->
-            <div class="results-section">
-                <div class="empty-state" id="emptyState">
-                    <div class="empty-state-icon">✈️</div>
-                    <p class="empty-state-text">Your adventure awaits...<br>Fill out the form to generate your personalized itinerary</p>
-                </div>
-
-                <div id="itineraryResults" style="display: none;">
-                    <!-- Results will be populated here -->
-                </div>
+        <!-- ════ RESULTS SECTION ════════════════════════════════════════ -->
+        <div class="results-section">
+            <div class="empty-state" id="emptyState">
+                <div class="empty-state-icon">✈️</div>
+                <p class="empty-state-text">
+                    Your adventure awaits…<br>
+                    Fill out the form to generate your personalised itinerary
+                </p>
             </div>
+            <div id="itineraryResults" style="display:none;"></div>
         </div>
     </div>
+</div>
 
-    <script>
-        // ============================================
-        // 🔧 CONFIGURATION - Update this for deployment
-        // ============================================
-        const API_URL = 'https://trailbuddy.onrender.com';
-        // const API_URL = 'http://localhost:8000';
-        
-        // ============================================
-        // MODE SWITCHING
-        // ============================================
-        document.querySelectorAll('.mode-tab').forEach(tab => {
-            tab.addEventListener('click', function() {
-                const mode = this.dataset.mode;
-                
-                // Update tabs
-                document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
-                this.classList.add('active');
-                
-                // Update content
-                document.querySelectorAll('.mode-content').forEach(c => c.classList.remove('active'));
-                if (mode === 'instagram') {
-                    document.getElementById('instagramMode').classList.add('active');
-                } else {
-                    document.getElementById('manualMode').classList.add('active');
-                }
-            });
+<script>
+// ════════════════════════════════════════════════════════════════════════
+// CONFIG
+// ════════════════════════════════════════════════════════════════════════
+const API_URL = 'https://trailbuddy.onrender.com';
+// const API_URL = 'http://localhost:8000';
+
+// ════════════════════════════════════════════════════════════════════════
+// MODE SWITCHING
+// ════════════════════════════════════════════════════════════════════════
+document.querySelectorAll('.mode-tab').forEach(tab => {
+    tab.addEventListener('click', function () {
+        document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.mode-content').forEach(c => c.classList.remove('active'));
+        this.classList.add('active');
+        const id = this.dataset.mode === 'instagram' ? 'instagramMode' : 'manualMode';
+        document.getElementById(id).classList.add('active');
+    });
+});
+
+// ════════════════════════════════════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════════════════════════════════════
+let cachedReelData    = null;   // from SSE complete event
+let cachedInsights    = null;   // video_insights from SSE complete event
+let extractedPlaces   = [];     // place array from SSE complete event
+let selectedPlaceNames = new Set();
+
+const PLACE_TYPE_ICONS = {
+    city: '🏙️', attraction: '🗺️', food: '🍽️',
+    stay: '🏨', activity: '🎯', region: '🌄',
+};
+
+// Step metadata for the progress UI
+const STEPS = [
+    { id: 'cache_check',   label: 'Cache Check',      icon: '🗄️' },
+    { id: 'apify',         label: 'Instagram Data',   icon: '📷' },
+    { id: 'download',      label: 'Video Download',   icon: '⬇️' },
+    { id: 'frames',        label: 'Frame Extraction', icon: '🎞️', concurrent: true },
+    { id: 'audio_extract', label: 'Audio Extraction', icon: '🔊', concurrent: true },
+    { id: 'vision',        label: 'GPT-4o Vision',    icon: '🔭', concurrent: true },
+    { id: 'whisper',       label: 'Whisper STT',      icon: '🎙️', concurrent: true },
+    { id: 'consolidate',   label: 'Consolidation',    icon: '🧩' },
+    { id: 'save',          label: 'Save to DB + R2',  icon: '💾', concurrent: true },
+    { id: 'places',        label: 'Place Extraction', icon: '📍' },
+];
+
+// ════════════════════════════════════════════════════════════════════════
+// STEP ROW UPDATER
+// ════════════════════════════════════════════════════════════════════════
+function updateStep(step, status, message) {
+    const row = document.querySelector(`[data-step="${step}"]`);
+    if (!row) return;
+
+    // Remove all status classes
+    row.classList.remove('idle', 'running', 'done', 'skipped', 'failed');
+    row.classList.add(status);
+
+    // Update icon area (spinner when running, icon when done/skipped)
+    const iconEl = row.querySelector('.step-icon');
+    let existingSpinner = row.querySelector('.step-spinner');
+
+    if (status === 'running') {
+        if (!existingSpinner) {
+            const spinner = document.createElement('div');
+            spinner.className = 'step-spinner';
+            row.insertBefore(spinner, iconEl);
+            iconEl.style.display = 'none';
+        }
+    } else {
+        if (existingSpinner) existingSpinner.remove();
+        iconEl.style.display = '';
+        if (status === 'done')    iconEl.textContent = '✅';
+        if (status === 'skipped') iconEl.textContent = '⏭️';
+        if (status === 'failed')  iconEl.textContent = '❌';
+    }
+
+    // Update message
+    const msgEl = row.querySelector('.step-msg');
+    if (msgEl) msgEl.textContent = message;
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// ANALYZE REEL — SSE LISTENER
+// ════════════════════════════════════════════════════════════════════════
+document.getElementById('analyzeBtn').addEventListener('click', async function () {
+    const reelUrl = document.getElementById('reelUrl').value.trim();
+    const errorDiv = document.getElementById('reelErrorMsg');
+    errorDiv.classList.remove('show');
+
+    if (!reelUrl) {
+        showReelError('Please paste an Instagram reel URL');
+        return;
+    }
+    if (!reelUrl.includes('instagram.com/reel/') && !reelUrl.includes('instagram.com/p/')) {
+        showReelError('Please enter a valid Instagram reel URL (instagram.com/reel/...)');
+        return;
+    }
+
+    // Reset UI
+    resetAnalysisPanel();
+    document.getElementById('placeSelectionWrap').classList.remove('show');
+    document.getElementById('analysisPanel').classList.add('show');
+    document.getElementById('analyzeBtn').disabled = true;
+
+    // Update step 1 indicator
+    setUiStep(1);
+
+    try {
+        await runAnalysisPipeline(reelUrl);
+    } catch (err) {
+        showReelError(err.message || 'Pipeline failed — please try again.');
+        document.getElementById('analyzeBtn').disabled = false;
+    }
+});
+
+async function runAnalysisPipeline(reelUrl) {
+    const body = JSON.stringify({ reel_url: reelUrl, skip_audio: false, skip_video: false });
+
+    const response = await fetch(`${API_URL}/analyze-reel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+    });
+
+    if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
+    }
+
+    // Read SSE stream manually (fetch + ReadableStream)
+    const reader   = response.body.getReader();
+    const decoder  = new TextDecoder();
+    let   buffer   = '';
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop(); // keep incomplete last line
+
+        for (const line of lines) {
+            if (!line.startsWith('data:')) continue;
+            const raw = line.slice(5).trim();
+            if (!raw) continue;
+
+            let event;
+            try { event = JSON.parse(raw); } catch { continue; }
+
+            handleSSEEvent(event);
+
+            if (event.step === 'complete') return;
+            if (event.step === 'error')    throw new Error(event.message);
+        }
+    }
+}
+
+function handleSSEEvent(event) {
+    const { step, status, message, progress } = event;
+
+    // Update progress bar
+    if (typeof progress === 'number') {
+        document.getElementById('progressBar').style.width = progress + '%';
+    }
+
+    // Update the step row
+    if (step !== 'complete' && step !== 'error') {
+        updateStep(step, status, message);
+    }
+
+    // Handle consolidate done → show insights preview
+    if (step === 'consolidate' && status === 'done') {
+        // Insights will be available in the complete event
+        document.getElementById('panelSubtitle').textContent =
+            'Almost done — extracting your place list…';
+    }
+
+    // Handle complete event
+    if (step === 'complete') {
+        cachedReelData  = event.cached_reel_data || {};
+        cachedInsights  = event.video_insights   || {};
+        extractedPlaces = event.places           || [];
+
+        // Mark all remaining steps done
+        STEPS.forEach(s => {
+            const row = document.querySelector(`[data-step="${s.id}"]`);
+            if (row && (row.classList.contains('idle') || row.classList.contains('running'))) {
+                updateStep(s.id, 'done', 'Complete');
+            }
         });
 
-        // ============================================
-        // INSTAGRAM REEL — TWO-STEP FLOW
-        // ============================================
+        // Show insights preview
+        renderInsightsPreview(cachedInsights);
 
-        let extractedReelUrl = '';
-        let extractedPlaces = [];
-        let selectedPlaceNames = new Set();
-        let cachedReelData = null;  // Stores reel data from Step 1 to avoid re-fetching
+        // Update panel header
+        document.getElementById('panelTitle').textContent =
+            `✅ Analysis complete — ${event.destination}`;
+        document.getElementById('panelSubtitle').textContent =
+            `${extractedPlaces.length} places found · select which ones to include`;
 
-        const PLACE_TYPE_ICONS = {
-            city: '🏙️',
-            attraction: '🗺️',
-            food: '🍽️',
-            stay: '🏨',
-            activity: '🎯',
-            region: '🌄'
+        // Show place selection UI
+        selectedPlaceNames = new Set(extractedPlaces.map(p => p.name));
+        renderPlaceGrid(event);
+        setUiStep(2);
+
+        document.getElementById('placeSelectionWrap').classList.add('show');
+        document.getElementById('analyzeBtn').disabled = false;
+        document.getElementById('placeSelectionWrap').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// INSIGHTS PREVIEW
+// ════════════════════════════════════════════════════════════════════════
+function renderInsightsPreview(insights) {
+    if (!insights || !Object.keys(insights).length) return;
+
+    const chipsEl   = document.getElementById('insightChips');
+    const summaryEl = document.getElementById('insightSummary');
+    const audioEl   = document.getElementById('audioCuesRow');
+    const preview   = document.getElementById('insightsPreview');
+
+    const chips = [
+        insights.places?.length        ? `📍 ${insights.places.length} places`          : null,
+        insights.scene_types?.length   ? `🎬 ${insights.scene_types.slice(0,3).join(', ')}` : null,
+        insights.vibe                  ? `✨ ${insights.vibe}`                             : null,
+        insights.inferred_duration_days ? `📅 ${insights.inferred_duration_days} days`    : null,
+        insights.inferred_budget_level  ? `💰 ${insights.inferred_budget_level}`          : null,
+        insights.hotels?.length        ? `🏨 ${insights.hotels[0]}`                       : null,
+    ].filter(Boolean);
+
+    chipsEl.innerHTML = chips.map(c =>
+        `<span class="insight-chip">${c}</span>`
+    ).join('');
+
+    summaryEl.textContent = insights.raw_summary || 'Video analysis complete.';
+
+    const cues = insights.itinerary_cues || [];
+    if (cues.length) {
+        audioEl.style.display = 'block';
+        audioEl.innerHTML = `🎙️ <strong>Spoken tips:</strong> ${cues.slice(0,3).join(' · ')}`;
+    }
+
+    preview.classList.add('show');
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// PLACE GRID
+// ════════════════════════════════════════════════════════════════════════
+function renderPlaceGrid(event) {
+    document.getElementById('extractionInfo').innerHTML = `
+        <strong>📍 ${event.destination}${event.country ? ', ' + event.country : ''}</strong>
+        We found <strong>${event.places.length} places</strong> — select the ones for your itinerary.
+    `;
+
+    const grid = document.getElementById('placesGrid');
+    grid.innerHTML = extractedPlaces.map(place => {
+        const icon = PLACE_TYPE_ICONS[place.type] || '📌';
+        const src  = place.source ? `<span style="font-size:0.65rem;opacity:0.7">(${place.source})</span>` : '';
+        return `
+            <div class="place-card selected" data-name="${escAttr(place.name)}"
+                 onclick="togglePlace(this,'${escAttr(place.name)}')">
+                <div class="place-check">✓</div>
+                <span class="place-type-icon">${icon}</span>
+                <div class="place-type-badge type-${place.type || 'attraction'}">${place.type || 'place'}</div>
+                <div class="place-card-name">${place.name} ${src}</div>
+                ${place.description ? `<div class="place-card-desc">${place.description}</div>` : ''}
+                ${place.inferred ? '<div class="place-card-desc" style="opacity:0.6;font-style:italic">inferred</div>' : ''}
+            </div>
+        `;
+    }).join('');
+
+    updateSelectionCount();
+}
+
+function togglePlace(card, name) {
+    card.classList.toggle('selected');
+    selectedPlaceNames[card.classList.contains('selected') ? 'add' : 'delete'](name);
+    updateSelectionCount();
+}
+
+function selectAllPlaces() {
+    document.querySelectorAll('.place-card').forEach(c => {
+        c.classList.add('selected');
+        selectedPlaceNames.add(c.dataset.name);
+    });
+    updateSelectionCount();
+}
+
+function clearAllPlaces() {
+    document.querySelectorAll('.place-card').forEach(c => c.classList.remove('selected'));
+    selectedPlaceNames.clear();
+    updateSelectionCount();
+}
+
+function updateSelectionCount() {
+    const n = selectedPlaceNames.size;
+    document.getElementById('selectionCount').textContent = `${n} place${n !== 1 ? 's' : ''} selected`;
+    const btn  = document.getElementById('generateFromReel');
+    const hint = document.getElementById('selectionHint');
+    btn.disabled     = n === 0;
+    hint.style.display = n === 0 ? 'block' : 'none';
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// GENERATE ITINERARY FROM REEL
+// ════════════════════════════════════════════════════════════════════════
+document.getElementById('generateFromReel').addEventListener('click', async function () {
+    const btn    = this;
+    const text   = document.getElementById('reelBtnText');
+    const spinner= document.getElementById('reelSpinner');
+
+    btn.disabled       = true;
+    text.style.display = 'none';
+    spinner.style.display = 'block';
+    setUiStep(3);
+
+    try {
+        const payload = {
+            reel_url:         document.getElementById('reelUrl').value.trim(),
+            selected_places:  Array.from(selectedPlaceNames),
+            cached_reel_data: cachedReelData,
+            video_insights:   cachedInsights,
         };
+        const dur = document.getElementById('reelDuration').value;
+        const bud = document.getElementById('reelBudget').value;
+        if (dur) payload.duration_override = parseInt(dur);
+        if (bud) payload.budget_level      = bud;
 
-        // ---- STEP 1: Extract Places ----
-        document.getElementById('extractPlacesBtn').addEventListener('click', async function () {
-            const reelUrl = document.getElementById('reelUrl').value.trim();
-            const errorMsg = document.getElementById('reelErrorMessage');
-            errorMsg.classList.remove('show');
-
-            if (!reelUrl) {
-                showReelError('Please enter an Instagram reel URL');
-                return;
-            }
-            if (!reelUrl.includes('instagram.com/reel/') && !reelUrl.includes('instagram.com/p/')) {
-                showReelError('Please enter a valid Instagram reel URL');
-                return;
-            }
-
-            const btn = this;
-            const btnText = document.getElementById('extractBtnText');
-            const spinner = document.getElementById('extractSpinner');
-
-            btn.disabled = true;
-            btnText.style.display = 'none';
-            spinner.style.display = 'block';
-
-            try {
-                const response = await fetch(`${API_URL}/extract-places-from-reel`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ reel_url: reelUrl })
-                });
-
-                const result = await response.json();
-
-                if (!response.ok || !result.success) {
-                    throw new Error(result.detail || 'Failed to extract places');
-                }
-
-                extractedReelUrl = reelUrl;
-                extractedPlaces = result.places || [];
-                cachedReelData = result.cached_reel_data || null;  // Cache for Step 2
-                
-                // Pre-select all places
-                selectedPlaceNames = new Set(extractedPlaces.map(p => p.name));
-
-                renderPlacesStep(result);
-                goToStep2();
-
-            } catch (error) {
-                console.error('Extraction error:', error);
-                showReelError(error.message || 'Failed to extract places. Please try again.');
-            } finally {
-                btn.disabled = false;
-                btnText.style.display = 'flex';
-                spinner.style.display = 'none';
-            }
+        const res = await fetch(`${API_URL}/generate-from-reel`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
         });
 
-        function renderPlacesStep(result) {
-            // Info banner
-            document.getElementById('extractionInfo').innerHTML = `
-                <strong>📍 ${result.destination}${result.country ? ', ' + result.country : ''}</strong>
-                We found <strong>${result.places.length} places</strong> from this reel. 
-                Select the ones you want included in your itinerary.
-            `;
+        const result = await res.json();
+        if (!res.ok || !result.success) throw new Error(result.detail || 'Generation failed');
 
-            // Render place cards
-            const grid = document.getElementById('placesGrid');
-            grid.innerHTML = extractedPlaces.map(place => {
-                const icon = PLACE_TYPE_ICONS[place.type] || '📌';
-                const typeLabel = place.type || 'place';
-                return `
-                    <div class="place-card selected" data-name="${escapeAttr(place.name)}" onclick="togglePlace(this, '${escapeAttr(place.name)}')">
-                        <div class="place-check">✓</div>
-                        <span class="place-type-icon">${icon}</span>
-                        <div class="place-type-badge type-${place.type || 'attraction'}">${typeLabel}</div>
-                        <div class="place-card-name">${place.name}</div>
-                        ${place.description ? `<div class="place-card-desc">${place.description}</div>` : ''}
-                    </div>
-                `;
-            }).join('');
+        displayItinerary(result.data);
+        document.querySelector('.results-section').scrollIntoView({ behavior: 'smooth' });
 
-            updateSelectionCount();
-        }
+    } catch (err) {
+        showReelError(err.message || 'Generation failed — please try again.');
+        setUiStep(2);
+    } finally {
+        btn.disabled       = selectedPlaceNames.size === 0;
+        text.style.display = 'inline';
+        spinner.style.display = 'none';
+    }
+});
 
-        function togglePlace(card, name) {
-            card.classList.toggle('selected');
-            if (card.classList.contains('selected')) {
-                selectedPlaceNames.add(name);
-            } else {
-                selectedPlaceNames.delete(name);
-            }
-            updateSelectionCount();
-        }
+// ════════════════════════════════════════════════════════════════════════
+// BACK BUTTON
+// ════════════════════════════════════════════════════════════════════════
+document.getElementById('backBtn').addEventListener('click', function () {
+    document.getElementById('placeSelectionWrap').classList.remove('show');
+    document.getElementById('analysisPanel').classList.remove('show');
+    document.getElementById('reelUrl').value = '';
+    cachedReelData = null;
+    cachedInsights = null;
+    setUiStep(1);
+});
 
-        function selectAllPlaces() {
-            document.querySelectorAll('.place-card').forEach(card => {
-                card.classList.add('selected');
-                selectedPlaceNames.add(card.dataset.name);
-            });
-            updateSelectionCount();
-        }
+// ════════════════════════════════════════════════════════════════════════
+// MANUAL FORM
+// ════════════════════════════════════════════════════════════════════════
+let selectedThemes = [];
+let interests      = [];
 
-        function clearAllPlaces() {
-            document.querySelectorAll('.place-card').forEach(card => {
-                card.classList.remove('selected');
-            });
-            selectedPlaceNames.clear();
-            updateSelectionCount();
-        }
+document.querySelectorAll('#themeOptions .tag').forEach(tag => {
+    tag.addEventListener('click', function () {
+        this.classList.toggle('active');
+        const v = this.dataset.value;
+        selectedThemes = this.classList.contains('active')
+            ? [...selectedThemes, v]
+            : selectedThemes.filter(t => t !== v);
+    });
+});
 
-        function updateSelectionCount() {
-            const count = selectedPlaceNames.size;
-            document.getElementById('selectionCount').textContent = 
-                `${count} place${count !== 1 ? 's' : ''} selected`;
-            
-            const btn = document.getElementById('generateFromReel');
-            const hint = document.getElementById('selectionHint');
-            if (count > 0) {
-                btn.disabled = false;
-                hint.style.display = 'none';
-            } else {
-                btn.disabled = true;
-                hint.style.display = 'block';
-            }
-        }
+function addInterest() {
+    const el = document.getElementById('interestInput');
+    const v  = el.value.trim();
+    if (v && !interests.includes(v)) {
+        interests.push(v);
+        renderInterests();
+        el.value = '';
+    }
+}
 
-        function goToStep2() {
-            document.getElementById('step1Panel').style.display = 'none';
-            document.getElementById('step2Panel').classList.add('show');
-            // Update step indicator
-            document.getElementById('stepDot1').className = 'step-dot done';
-            document.getElementById('stepDot1').textContent = '✓';
-            document.getElementById('stepLine1').classList.add('done');
-            document.getElementById('stepDot2').className = 'step-dot active';
-        }
+document.getElementById('interestInput').addEventListener('keypress', e => {
+    if (e.key === 'Enter') { e.preventDefault(); addInterest(); }
+});
 
-        function goToStep1() {
-            document.getElementById('step1Panel').style.display = 'block';
-            document.getElementById('step2Panel').classList.remove('show');
-            cachedReelData = null;  // Clear cache so a fresh URL fetch can happen
-            // Reset step indicator
-            document.getElementById('stepDot1').className = 'step-dot active';
-            document.getElementById('stepDot1').textContent = '1';
-            document.getElementById('stepLine1').classList.remove('done');
-            document.getElementById('stepDot2').className = 'step-dot pending';
-        }
+function renderInterests() {
+    document.getElementById('interestTags').innerHTML = interests.map(i =>
+        `<span class="tag active" onclick="removeInterest('${i}')">${i} ×</span>`
+    ).join('');
+}
 
-        document.getElementById('backToStep1Btn').addEventListener('click', goToStep1);
+function removeInterest(i) {
+    interests = interests.filter(x => x !== i);
+    renderInterests();
+}
 
-        // ---- STEP 2 → 3: Generate Itinerary ----
-        document.getElementById('generateFromReel').addEventListener('click', async function () {
-            const durationOverride = document.getElementById('reelDuration').value;
-            const budgetLevel = document.getElementById('reelBudget').value;
-            const selected = Array.from(selectedPlaceNames);
+document.getElementById('itineraryForm').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    if (!selectedThemes.length) { showError('Please select at least one travel theme'); return; }
 
-            const btn = this;
-            const btnText = document.getElementById('reelButtonText');
-            const spinner = document.getElementById('reelSpinner');
+    const data = {
+        place:               document.getElementById('place').value,
+        duration:            parseInt(document.getElementById('duration').value),
+        theme:               selectedThemes,
+        number_of_people:    parseInt(document.getElementById('people').value),
+        budget_level:        document.getElementById('budget').value,
+        interests:           interests.length ? interests : ['General sightseeing'],
+        pace:                document.getElementById('pace').value,
+        accommodation_area:  document.getElementById('accommodation').value || 'City center',
+        transport_preference:document.getElementById('transport').value || 'Public transport',
+        food_preference:     document.getElementById('food').value || 'Local cuisine',
+        constraints:         document.getElementById('constraints').value.split(',').map(s=>s.trim()).filter(Boolean),
+        season_dates:        document.getElementById('dates').value.split(',').map(s=>s.trim()).filter(Boolean),
+    };
 
-            btn.disabled = true;
-            btnText.style.display = 'none';
-            spinner.style.display = 'block';
+    const btn    = document.getElementById('manualGenerateBtn');
+    const text   = document.getElementById('manualBtnText');
+    const spinner= document.getElementById('manualSpinner');
+    btn.disabled = true; text.style.display='none'; spinner.style.display='block';
 
-            // Update step indicator to step 3 loading
-            document.getElementById('stepDot2').className = 'step-dot done';
-            document.getElementById('stepDot2').textContent = '✓';
-            document.getElementById('stepLine2').classList.add('done');
-            document.getElementById('stepDot3').className = 'step-dot active';
-
-            try {
-                const payload = {
-                    reel_url: extractedReelUrl,
-                    selected_places: selected,
-                    cached_reel_data: cachedReelData  // Reuse Step 1 data — no Apify re-call
-                };
-                if (durationOverride) payload.duration_override = parseInt(durationOverride);
-                if (budgetLevel) payload.budget_level = budgetLevel;
-
-                const response = await fetch(`${API_URL}/generate-from-reel`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-
-                const result = await response.json();
-
-                if (result.success) {
-                    displayItinerary(result.data, result.reel_data);
-                    // Scroll to results
-                    document.querySelector('.results-section').scrollIntoView({ behavior: 'smooth' });
-                } else {
-                    throw new Error(result.detail || 'Failed to generate itinerary');
-                }
-            } catch (error) {
-                console.error('Generation error:', error);
-                showReelError(error.message || 'An error occurred. Please try again.');
-                // Revert step 3 indicator
-                document.getElementById('stepDot3').className = 'step-dot pending';
-                document.getElementById('stepLine2').classList.remove('done');
-                document.getElementById('stepDot2').className = 'step-dot active';
-                document.getElementById('stepDot2').textContent = '2';
-            } finally {
-                btn.disabled = selectedPlaceNames.size === 0;
-                btnText.style.display = 'inline';
-                spinner.style.display = 'none';
-            }
+    try {
+        const res    = await fetch(`${API_URL}/generate`, {
+            method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data),
         });
+        const result = await res.json();
+        if (!res.ok) throw new Error(result.detail || 'Generation failed');
+        displayItinerary(result.data);
+    } catch (err) {
+        showError(err.message || 'Failed to generate itinerary. Please try again.');
+    } finally {
+        btn.disabled=false; text.style.display='inline'; spinner.style.display='none';
+    }
+});
 
-        function showReelError(message) {
-            const errorMsg = document.getElementById('reelErrorMessage');
-            errorMsg.textContent = message;
-            errorMsg.classList.add('show');
-            setTimeout(() => errorMsg.classList.remove('show'), 6000);
-        }
+// ════════════════════════════════════════════════════════════════════════
+// DISPLAY ITINERARY
+// ════════════════════════════════════════════════════════════════════════
+function displayItinerary(data) {
+    document.getElementById('emptyState').style.display = 'none';
+    const results = document.getElementById('itineraryResults');
+    results.style.display = 'block';
 
-        function escapeAttr(str) {
-            return str.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-        }
-        
-        // ============================================
-        // MANUAL FORM HANDLING
-        // ============================================
-        
-        // State
-        let selectedThemes = [];
-        let interests = [];
+    results.innerHTML = `
+        <div class="itinerary-header fade-in">
+            <h2 class="destination-name">${data.destination}</h2>
+            <div class="trip-meta">
+                <div class="meta-item"><span class="meta-icon">📅</span><span>${data.duration} Days</span></div>
+                <div class="meta-item"><span class="meta-icon">💰</span><span>${cap(data.budget_level)}</span></div>
+            </div>
+            ${(data.theme||[]).length ? `
+                <div class="activities-list">
+                    ${data.theme.map(t=>`<span class="activity-badge">${t}</span>`).join('')}
+                </div>` : ''}
+        </div>
 
-        // Initialize theme selection
-        document.querySelectorAll('#themeOptions .tag').forEach(tag => {
-            tag.addEventListener('click', function() {
-                this.classList.toggle('active');
-                const value = this.dataset.value;
-                
-                if (this.classList.contains('active')) {
-                    selectedThemes.push(value);
-                } else {
-                    selectedThemes = selectedThemes.filter(t => t !== value);
-                }
-            });
-        });
+        <div class="days-container">
+            ${(data.days||[]).map((day, i) => `
+                <div class="day-card fade-in" style="animation-delay:${i*0.1}s">
+                    <h3 class="day-number">Day ${day.day}${day.title ? ` — ${day.title}` : ''}</h3>
 
-        // Add interest function
-        function addInterest() {
-            const input = document.getElementById('interestInput');
-            const value = input.value.trim();
-            
-            if (value && !interests.includes(value)) {
-                interests.push(value);
-                renderInterests();
-                input.value = '';
-            }
-        }
-
-        // Allow Enter key to add interest
-        document.getElementById('interestInput').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                addInterest();
-            }
-        });
-
-        // Render interests
-        function renderInterests() {
-            const container = document.getElementById('interestTags');
-            container.innerHTML = interests.map(interest => `
-                <span class="tag active" onclick="removeInterest('${interest}')">
-                    ${interest} ×
-                </span>
-            `).join('');
-        }
-
-        // Remove interest
-        function removeInterest(interest) {
-            interests = interests.filter(i => i !== interest);
-            renderInterests();
-        }
-
-        // Form submission
-        document.getElementById('itineraryForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            
-            // Validate theme selection
-            if (selectedThemes.length === 0) {
-                showError('Please select at least one travel theme');
-                return;
-            }
-
-            const formData = {
-                place: document.getElementById('place').value,
-                duration: parseInt(document.getElementById('duration').value),
-                theme: selectedThemes,
-                number_of_people: parseInt(document.getElementById('people').value),
-                budget_level: document.getElementById('budget').value,
-                interests: interests.length > 0 ? interests : ['General sightseeing'],
-                pace: document.getElementById('pace').value,
-                accommodation_area: document.getElementById('accommodation').value || 'City center',
-                transport_preference: document.getElementById('transport').value || 'Public transport',
-                food_preference: document.getElementById('food').value || 'Local cuisine',
-                constraints: document.getElementById('constraints').value.split(',').map(s => s.trim()).filter(s => s),
-                season_dates: document.getElementById('dates').value.split(',').map(s => s.trim()).filter(s => s)
-            };
-
-            await generateItinerary(formData);
-        });
-
-        // Generate itinerary
-        async function generateItinerary(data) {
-            const btn = document.getElementById('generateBtn');
-            const btnText = document.getElementById('btnText');
-            const spinner = document.getElementById('loadingSpinner');
-            const errorMsg = document.getElementById('errorMessage');
-            
-            // Show loading state
-            btn.disabled = true;
-            btnText.style.display = 'none';
-            spinner.style.display = 'block';
-            errorMsg.classList.remove('show');
-
-            try {
-                const response = await fetch(`${API_URL}/generate`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(data)
-                });
-
-                if (!response.ok) {
-                    throw new Error('Failed to generate itinerary');
-                }
-
-                const result = await response.json();
-                displayItinerary(result.data);
-                
-            } catch (error) {
-                showError('Failed to generate itinerary. Please try again.');
-                console.error('Error:', error);
-            } finally {
-                // Reset button state
-                btn.disabled = false;
-                btnText.style.display = 'inline';
-                spinner.style.display = 'none';
-            }
-        }
-
-        // ============================================
-        // DISPLAY ITINERARY
-        // ============================================
-        
-        function displayItinerary(data, reelData = null) {
-            const emptyState = document.getElementById('emptyState');
-            const results = document.getElementById('itineraryResults');
-            
-            emptyState.style.display = 'none';
-            results.style.display = 'block';
-            
-            results.innerHTML = `
-                <div class="itinerary-header fade-in">
-                    <h2 class="destination-name">${data.destination}</h2>
-                    <div class="trip-meta">
-                        <div class="meta-item">
-                            <span class="meta-icon">📅</span>
-                            <span>${data.duration} Days</span>
+                    ${(day.activities||[]).length ? `
+                    <div class="day-section">
+                        <div class="day-section-title"><span>🎯</span> Activities</div>
+                        <div class="timeline-items">
+                            ${day.activities.map(renderActivity).join('')}
                         </div>
-                        <div class="meta-item">
-                            <span class="meta-icon">💰</span>
-                            <span>${capitalizeFirst(data.budget_level)}</span>
-                        </div>
-                    </div>
-                    ${data.theme && data.theme.length > 0 ? `
-                        <div class="activities-list">
-                            ${data.theme.map(theme => `
-                                <span class="activity-badge">${theme}</span>
-                            `).join('')}
-                        </div>
-                    ` : (data.activities && data.activities.length > 0 ? `
-                        <div class="activities-list">
-                            ${data.activities.map(activity => `
-                                <span class="activity-badge">${activity}</span>
-                            `).join('')}
-                        </div>
-                    ` : '')}
-                </div>
+                    </div>` : ''}
 
-                <div class="days-container">
-                    ${data.days.map((day, index) => `
-                        <div class="day-card fade-in" style="animation-delay: ${index * 0.1}s">
-                            <h3 class="day-number">Day ${day.day}</h3>
-                            
-                            ${day.places && day.places.length > 0 ? `
-                                <div class="day-section">
-                                    <div class="day-section-title">
-                                        <span>📍</span> Places to Visit
-                                    </div>
-                                    <div class="timeline-items">
-                                        ${day.places.map(place => renderPlace(place)).join('')}
-                                    </div>
-                                </div>
-                            ` : ''}
-                            
-                            ${day.activities && day.activities.length > 0 ? `
-                                <div class="day-section">
-                                    <div class="day-section-title">
-                                        <span>🎯</span> Activities
-                                    </div>
-                                    <div class="timeline-items">
-                                        ${day.activities.map(activity => renderActivity(activity)).join('')}
-                                    </div>
-                                </div>
-                            ` : ''}
-                            
-                            ${day.food && day.food.length > 0 ? `
-                                <div class="day-section">
-                                    <div class="day-section-title">
-                                        <span>🍽️</span> Food Recommendations
-                                    </div>
-                                    <div class="food-items">
-                                        ${day.food.map(food => renderFood(food)).join('')}
-                                    </div>
-                                </div>
-                            ` : ''}
-                            
-                            ${day.stay ? `
-                                <div class="day-section">
-                                    <div class="day-section-title">
-                                        <span>🏨</span> Accommodation
-                                    </div>
-                                    <div class="timeline-content">${day.stay}</div>
-                                </div>
-                            ` : ''}
-                        </div>
-                    `).join('')}
-                </div>
+                    ${(day.food||[]).length ? `
+                    <div class="day-section">
+                        <div class="day-section-title"><span>🍽️</span> Food</div>
+                        <div class="food-items">${day.food.map(renderFood).join('')}</div>
+                    </div>` : ''}
 
-                ${data.travel_tips && data.travel_tips.length > 0 ? `
-                    <div class="travel-tips fade-in">
-                        <h3 class="tips-title">Travel Tips</h3>
-                        <ul class="tips-list">
-                            ${data.travel_tips.map(tip => `<li>${tip}</li>`).join('')}
-                        </ul>
-                    </div>
-                ` : ''}
-            `;
-
-            // Scroll to results
-            results.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-
-        // Render place with timeline
-        function renderPlace(place) {
-            if (typeof place === 'string') {
-                return `
-                    <div class="timeline-item">
+                    ${day.accommodation ? `
+                    <div class="day-section">
+                        <div class="day-section-title"><span>🏨</span> Accommodation</div>
                         <div class="timeline-content">
-                            <div class="timeline-name">${place}</div>
+                            ${day.accommodation.suggestion || day.accommodation.area || JSON.stringify(day.accommodation)}
                         </div>
-                    </div>
-                `;
-            }
-
-            const timeRange = place.start_time && place.end_time 
-                ? `${place.start_time} - ${place.end_time}` 
-                : place.start_time || '';
-
-            return `
-                <div class="timeline-item">
-                    ${timeRange ? `<div class="timeline-time">${timeRange}</div>` : ''}
-                    <div class="timeline-content">
-                        <div class="timeline-name">
-                            ${place.name}
-                            ${place.duration ? `<span class="duration-badge">${place.duration}</span>` : ''}
-                        </div>
-                        ${place.description ? `<p class="timeline-desc">${place.description}</p>` : ''}
-                    </div>
+                    </div>` : (day.stay ? `
+                    <div class="day-section">
+                        <div class="day-section-title"><span>🏨</span> Accommodation</div>
+                        <div class="timeline-content">${day.stay}</div>
+                    </div>` : '')}
                 </div>
-            `;
-        }
+            `).join('')}
+        </div>
 
-        // Render activity with timeline
-        function renderActivity(activity) {
-            if (typeof activity === 'string') {
-                return `
-                    <div class="timeline-item">
-                        <div class="timeline-content">
-                            <div class="timeline-name">${activity}</div>
-                        </div>
-                    </div>
-                `;
-            }
+        ${(data.travel_tips||[]).length ? `
+        <div class="travel-tips fade-in">
+            <h3 class="tips-title">Travel Tips</h3>
+            <ul class="tips-list">${data.travel_tips.map(t=>`<li>${t}</li>`).join('')}</ul>
+        </div>` : ''}
+    `;
 
-            const timeRange = activity.start_time && activity.end_time 
-                ? `${activity.start_time} - ${activity.end_time}` 
-                : activity.start_time || '';
+    results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
 
-            return `
-                <div class="timeline-item">
-                    ${timeRange ? `<div class="timeline-time">${timeRange}</div>` : ''}
-                    <div class="timeline-content">
-                        <div class="timeline-name">
-                            ${activity.name}
-                            ${activity.duration ? `<span class="duration-badge">${activity.duration}</span>` : ''}
-                        </div>
-                        ${activity.description ? `<p class="timeline-desc">${activity.description}</p>` : ''}
-                    </div>
-                </div>
-            `;
-        }
+function renderActivity(a) {
+    if (typeof a === 'string') return `<div class="timeline-item"><div class="timeline-content"><div class="timeline-name">${a}</div></div></div>`;
+    const time = a.start_time && a.end_time ? `${a.start_time} – ${a.end_time}` : a.start_time || '';
+    return `
+        <div class="timeline-item">
+            ${time ? `<div class="timeline-time">${time}</div>` : ''}
+            <div class="timeline-content">
+                <div class="timeline-name">${a.name}${a.duration?`<span class="duration-badge">${a.duration}</span>`:''}</div>
+                ${a.description ? `<p class="timeline-desc">${a.description}</p>` : ''}
+            </div>
+        </div>`;
+}
 
-        // Render food recommendation
-        function renderFood(food) {
-            if (typeof food === 'string') {
-                return `
-                    <div class="food-item">
-                        <div class="food-content">
-                            <div class="restaurant-name">${food}</div>
-                        </div>
-                    </div>
-                `;
-            }
+function renderFood(f) {
+    if (typeof f === 'string') return `<div class="food-item"><div class="restaurant-name">${f}</div></div>`;
+    return `
+        <div class="food-item">
+            <div class="food-header">
+                ${f.meal_type ? `<span class="meal-type-badge">${f.meal_type}</span>` : ''}
+                ${f.time      ? `<span class="food-time">${f.time}</span>` : ''}
+                ${f.price_range ? `<span class="price-badge">${f.price_range}</span>` : ''}
+            </div>
+            ${f.restaurant_name ? `<div class="restaurant-name">📍 ${f.restaurant_name}</div>` : ''}
+            ${f.location ? `<div class="restaurant-location">${f.location}</div>` : ''}
+            ${(f.dishes||[]).length ? `
+            <div class="dishes-list">
+                <strong>🍴 Must-try:</strong>
+                <ul>${f.dishes.map(d => typeof d==='string'
+                    ? `<li><span class="dish-name">${d}</span></li>`
+                    : `<li><span class="dish-name">${d.name}</span>${d.description?`<div class="dish-description">${d.description}</div>`:''}</li>`
+                ).join('')}</ul>
+            </div>` : ''}
+            ${f.why_recommended ? `<p class="food-desc">💡 ${f.why_recommended}</p>` : ''}
+        </div>`;
+}
 
-            return `
-                <div class="food-item">
-                    <div class="food-header">
-                        ${food.meal_type ? `<span class="meal-type-badge">${food.meal_type}</span>` : ''}
-                        ${food.time ? `<span class="food-time">${food.time}</span>` : ''}
-                        ${food.price_range ? `<span class="price-badge">${food.price_range}</span>` : ''}
-                    </div>
-                    <div class="food-content">
-                        ${food.restaurant_name ? `<div class="restaurant-name">📍 ${food.restaurant_name}</div>` : ''}
-                        ${food.location ? `<div class="restaurant-location">${food.location}</div>` : ''}
-                        ${food.dishes && food.dishes.length > 0 ? `
-                            <div class="dishes-list">
-                                <strong>🍴 Must-try dishes:</strong>
-                                <ul>
-                                    ${food.dishes.map(dish => {
-                                        if (typeof dish === 'string') {
-                                            return `<li><span class="dish-name">${dish}</span></li>`;
-                                        }
-                                        return `
-                                            <li>
-                                                <span class="dish-name">${dish.name}</span>
-                                                ${dish.description ? `<div class="dish-description">${dish.description}</div>` : ''}
-                                            </li>
-                                        `;
-                                    }).join('')}
-                                </ul>
-                            </div>
-                        ` : ''}
-                        ${food.why_recommended ? `<p class="food-desc">💡 ${food.why_recommended}</p>` : ''}
-                        ${food.description ? `<p class="food-desc">💡 ${food.description}</p>` : ''}
-                    </div>
-                </div>
-            `;
-        }
+// ════════════════════════════════════════════════════════════════════════
+// HELPERS
+// ════════════════════════════════════════════════════════════════════════
+function setUiStep(n) {
+    // Step dots
+    ['uiDot1','uiDot2','uiDot3'].forEach((id, i) => {
+        const el = document.getElementById(id);
+        el.className = 'step-dot';
+        if (i + 1 < n)  { el.classList.add('done');    el.textContent = '✓'; }
+        if (i + 1 === n){ el.classList.add('active');   el.textContent = i + 1; }
+        if (i + 1 > n)  { el.classList.add('pending');  el.textContent = i + 1; }
+    });
+    // Lines
+    document.getElementById('uiLine1').className = 'step-line' + (n > 1 ? ' done' : '');
+    document.getElementById('uiLine2').className = 'step-line' + (n > 2 ? ' done' : '');
+}
 
-        // Utility function
-        function capitalizeFirst(str) {
-            return str.charAt(0).toUpperCase() + str.slice(1);
-        }
+function resetAnalysisPanel() {
+    document.getElementById('progressBar').style.width = '0%';
+    document.getElementById('panelTitle').textContent   = 'Analyzing your reel…';
+    document.getElementById('panelSubtitle').textContent =
+        'Fetching content · downloading video · analyzing frames & audio simultaneously';
+    document.getElementById('insightsPreview').classList.remove('show');
+    STEPS.forEach(s => updateStep(s.id, 'idle', 'Waiting…'));
+    document.querySelectorAll('.step-icon').forEach(el => {
+        const stepId = el.closest('[data-step]')?.dataset.step;
+        const meta   = STEPS.find(s => s.id === stepId);
+        if (meta) el.textContent = meta.icon;
+        el.style.display = '';
+    });
+}
 
-        // Show error message
-        function showError(message) {
-            const errorMsg = document.getElementById('errorMessage');
-            errorMsg.textContent = message;
-            errorMsg.classList.add('show');
-            
-            // Auto-hide after 5 seconds
-            setTimeout(() => {
-                errorMsg.classList.remove('show');
-            }, 5000);
-        }
-    </script>
+function showReelError(msg) {
+    const el = document.getElementById('reelErrorMsg');
+    el.textContent = msg;
+    el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), 7000);
+}
+
+function showError(msg) {
+    const el = document.getElementById('errorMessage');
+    el.textContent = msg;
+    el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), 5000);
+}
+
+function cap(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : ''; }
+function escAttr(s) { return (s||'').replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
+</script>
 </body>
 </html>
