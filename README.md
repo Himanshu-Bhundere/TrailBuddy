@@ -1,45 +1,64 @@
-# 🧭 TrailBuddy — AI Travel Itinerary Generator
+# 🌍 TrailBuddy — AI Travel Itinerary Generator
 
-> Turn any Instagram travel reel into a personalized, day-by-day itinerary in seconds.
+> Paste an Instagram travel reel. Get a personalised day-by-day itinerary in minutes.
+
+TrailBuddy analyses Instagram reels using computer vision, speech recognition, and large language models to extract every place, hotel, restaurant, and activity visible in the video — then turns them into a complete travel plan.
 
 ---
 
 ## ✨ Features
 
-- **🎥 Instagram Reel → Itinerary**: Paste a reel URL, extract places, and generate a full travel plan
-- **📍 Smart Place Extraction**: AI identifies cities, attractions, restaurants from captions & hashtags
-- **🎯 Customizable**: Select which places you want to visit before generating
-- **💾 Persistent Cache**: Supabase + Cloudflare R2 storage (same reel = instant for all users)
-- **✍️ Manual Mode**: Create itineraries from scratch without reels
-- **🌐 Production Ready**: Zero-downtime deployment on Render.com
-
----
-
-## 🗺️ User Flow
-
-```
-Step 1 → Paste Reel URL → AI extracts places
-Step 2 → Select places you want to visit
-Step 3 → Generate detailed day-by-day itinerary
-```
+- **Instagram Reel Analysis** — paste any public travel reel URL and TrailBuddy does the rest
+- **Concurrent Video Pipeline** — frames and audio are processed simultaneously via `asyncio`
+- **GPT-4o Vision OCR** — reads on-screen text, day labels, prices, hotel names, and itinerary slides at full resolution
+- **Whisper Transcription** — extracts spoken place names, tips, and travel cues from the voiceover
+- **Smart 4-State Cache** — skips only the parts already stored in the database
+- **Manual Mode** — enter destination, duration, themes, and preferences without a reel
+- **Real-Time Progress UI** — live step-by-step progress stream via Server-Sent Events (SSE)
 
 ---
 
 ## 🏗️ Architecture
 
 ```
-Frontend (HTML/CSS/JS)
-    ↓
-FastAPI Backend
-    ↓
-├─ Apify → Instagram reel data
-├─ OpenAI GPT-4o → Extract places & generate itinerary
-└─ Supabase + R2 → Cache (metadata + videos)
+User
+ ↓
+Paste Instagram Reel URL
+ ↓
+┌──────────────────────────────────────────┐
+│  Cache Check (Supabase)                  │
+│  State A: nothing → full pipeline        │
+│  State B: caption cached → skip Apify   │
+│  State C: video cached → skip video     │
+│  State D: both cached → instant places  │
+└──────────────────────────────────────────┘
+ ↓
+Apify → caption + hashtags + video URL
+ ↓
+Download video (R2 → Instagram CDN fallback)
+ ↓
+┌─────────────────────┬────────────────────┐
+│  ffmpeg             │  ffmpeg            │  ← CONCURRENT
+│  Frame extraction   │  Audio extraction  │
+└─────────────────────┴────────────────────┘
+ ↓
+┌─────────────────────┬────────────────────┐
+│  GPT-4o Vision      │  Whisper STT       │  ← CONCURRENT
+│  OCR + scene data   │  Transcript + cues │
+└─────────────────────┴────────────────────┘
+ ↓
+GPT-4o Consolidation (merge all signals)
+ ↓
+┌─────────────────────┬────────────────────┐
+│  Save → Supabase    │  Upload → R2       │  ← CONCURRENT
+└─────────────────────┴────────────────────┘
+ ↓
+Place extraction (LLM using all data)
+ ↓
+User selects places
+ ↓
+GPT-4o Itinerary generation
 ```
-
-**Storage:**
-- **Supabase** (PostgreSQL): JSON metadata, queryable cache
-- **Cloudflare R2**: Video files, zero egress fees
 
 ---
 
@@ -47,295 +66,281 @@ FastAPI Backend
 
 | Layer | Technology |
 |---|---|
-| Frontend | HTML, CSS, Vanilla JS |
-| Backend | Python, FastAPI, Uvicorn |
-| Reel Scraping | Apify Instagram Scraper |
-| AI | OpenAI GPT-4o (reel), GPT-4o-mini (manual) |
-| Cache Storage | Supabase + Cloudflare R2 |
-| Deployment | Render.com (backend), Netlify (frontend) |
+| Backend | FastAPI + Python 3.11 |
+| LLM | OpenAI GPT-4o (vision + text) |
+| Speech-to-Text | OpenAI Whisper |
+| Video Processing | ffmpeg (scene-change + dense frame extraction) |
+| Instagram Scraping | Apify (`apify/instagram-scraper`) |
+| Database | Supabase (PostgreSQL) |
+| Video Storage | Cloudflare R2 (S3-compatible) |
+| Frontend | Vanilla HTML/CSS/JS with SSE streaming |
+| Deployment | Render.com (backend) + Netlify (frontend) |
 
 ---
 
 ## 📁 Project Structure
 
 ```
-trailbuddy/
-├── backend_api.py           # FastAPI backend
-├── storage_backend.py       # Supabase + R2 storage layer
-├── index.html               # Frontend UI
-├── style.css               # Styles
-├── requirements.txt         # Python dependencies
-└── .env.example            # Environment template
+TrailBuddy/
+├── backend_api.py       # FastAPI app — SSE pipeline, all endpoints
+├── video_processor.py   # Video intelligence — frames, OCR, Whisper, consolidation
+├── storage_backend.py   # Supabase + R2 storage abstraction
+├── index.html           # Frontend — SSE progress UI + itinerary display
+├── style.css            # Styles
+├── render.yaml          # Render.com deployment config (includes ffmpeg)
+├── requirements.txt     # Python dependencies
+└── README.md
 ```
 
 ---
 
-## ⚙️ Setup
+## ⚙️ Environment Variables
 
-### Prerequisites
-
-- Python 3.10+
-- [OpenAI API key](https://platform.openai.com/api-keys)
-- [Apify token](https://console.apify.com/account/integrations)
-- [Supabase account](https://supabase.com) (free)
-- [Cloudflare account](https://cloudflare.com) with R2 enabled (free)
-
----
-
-### 1. Clone & Install
-
-```bash
-git clone https://github.com/your-username/trailbuddy.git
-cd trailbuddy
-pip install -r requirements.txt
-```
-
----
-
-### 2. Set Up Supabase
-
-1. Create project at [supabase.com](https://supabase.com)
-2. Run this SQL in SQL Editor:
-
-```sql
-CREATE TABLE reel_cache (
-    reel_id TEXT PRIMARY KEY,
-    url TEXT NOT NULL,
-    caption TEXT,
-    hashtags TEXT[] DEFAULT '{}',
-    location TEXT,
-    likes INTEGER DEFAULT 0,
-    timestamp TEXT,
-    owner_username TEXT,
-    video_url TEXT,
-    display_url TEXT,
-    r2_video_key TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-```
-
-3. Get credentials:
-   - Settings → API → **Project URL**
-   - Settings → API → **`service_role` key** (secret)
-
----
-
-### 3. Set Up Cloudflare R2
-
-1. Go to [dash.cloudflare.com](https://dash.cloudflare.com) → R2
-2. Create bucket: `trailbuddy-reels`
-3. Manage API Tokens → Create token:
-   - Permissions: **Object Read & Write**
-   - Bucket: `trailbuddy-reels`
-4. Copy: **Account ID**, **Access Key ID**, **Secret Access Key**
-
----
-
-### 4. Configure Environment
-
-Create `.env` file:
+Create a `.env` file in the project root:
 
 ```env
-# OpenAI & Apify
+# OpenAI
 OPENAI_API_KEY=sk-...
+
+# Apify (Instagram scraping)
 APIFY_API_TOKEN=apify_api_...
 
-# Storage
+# Storage backend — "supabase_r2" for production, "local" for development
 STORAGE_BACKEND=supabase_r2
 
 # Supabase
-SUPABASE_URL=https://xxxxx.supabase.co
-SUPABASE_SERVICE_KEY=eyJhbGci...
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_KEY=eyJ...
 
 # Cloudflare R2
-R2_ACCOUNT_ID=a1b2c3d4
-R2_ACCESS_KEY_ID=abc123
-R2_SECRET_ACCESS_KEY=xyz789
-R2_BUCKET_NAME=trailbuddy-reels
-R2_ENDPOINT_URL=https://a1b2c3d4.r2.cloudflarestorage.com
+R2_ACCOUNT_ID=abc123
+R2_ACCESS_KEY_ID=your-access-key
+R2_SECRET_ACCESS_KEY=your-secret-key
+R2_BUCKET_NAME=trailbuddy-videos
+R2_ENDPOINT_URL=https://abc123.r2.cloudflarestorage.com
+R2_PUBLIC_URL=https://pub-xxx.r2.dev   # optional — for public bucket access
 ```
 
 ---
 
-### 5. Run Locally
+## 🚀 Local Development
+
+### Prerequisites
+
+- Python 3.11+
+- ffmpeg installed at OS level
 
 ```bash
-# Start backend
+# Ubuntu / Debian
+sudo apt-get install -y ffmpeg
+
+# macOS
+brew install ffmpeg
+
+# Windows
+# Download from https://ffmpeg.org/download.html and add to PATH
+```
+
+### Setup
+
+```bash
+# 1. Clone the repo
+git clone https://github.com/Himanshu-Bhundere/TrailBuddy
+cd TrailBuddy
+
+# 2. Install dependencies
+pip install -r requirements.txt
+
+# 3. Create .env (see Environment Variables above)
+cp .env.example .env
+
+# 4. Run the backend
 uvicorn backend_api:app --reload --port 8000
+```
 
-# In another terminal, start frontend
+### Frontend
+
+The frontend is a single `index.html` file — open it directly in a browser or serve it with any static server:
+
+```bash
+# Quick static server
 python -m http.server 3000
+# Open http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000)
+> Make sure `API_URL` in `index.html` points to `http://localhost:8000` for local development.
 
 ---
 
-## 🚀 Deploy to Production
+## 🗄️ Database Setup
 
-### Backend (Render.com)
+Run the following SQL in your Supabase SQL Editor:
 
-1. Push to GitHub
-2. Create Web Service on [render.com](https://render.com)
-3. Connect repo
-4. Build command: `pip install -r requirements.txt`
-5. Start command: `uvicorn backend_api:app --host 0.0.0.0 --port $PORT`
-6. Add environment variables (from `.env` above)
-7. Deploy ✅
+```sql
+CREATE TABLE IF NOT EXISTS reel_cache (
+    id                      BIGSERIAL   PRIMARY KEY,
+    reel_id                 TEXT        UNIQUE NOT NULL,
+    url                     TEXT,
+    caption                 TEXT,
+    hashtags                TEXT[]      DEFAULT '{}',
+    location                TEXT,
+    likes                   INTEGER     DEFAULT 0,
+    timestamp               TEXT,
+    owner_username          TEXT,
+    video_url               TEXT,
+    display_url             TEXT,
+    r2_video_key            TEXT,
+    created_at              TIMESTAMPTZ DEFAULT NOW(),
+    updated_at              TIMESTAMPTZ DEFAULT NOW()
+);
 
-### Frontend (Netlify)
+-- Add video intelligence columns (safe to run even if table exists)
+ALTER TABLE reel_cache ADD COLUMN IF NOT EXISTS video_processed        BOOLEAN DEFAULT FALSE;
+ALTER TABLE reel_cache ADD COLUMN IF NOT EXISTS video_insights         JSONB;
+ALTER TABLE reel_cache ADD COLUMN IF NOT EXISTS inferred_duration_days INTEGER;
+ALTER TABLE reel_cache ADD COLUMN IF NOT EXISTS inferred_budget_level  TEXT;
 
-1. Update `API_URL` in `index.html`:
-   ```javascript
-   const API_URL = 'https://your-app.onrender.com';
-   ```
-2. Drag `index.html` to [netlify.com/drop](https://app.netlify.com/drop)
-3. Done ✅
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_reel_cache_reel_id         ON reel_cache (reel_id);
+CREATE INDEX IF NOT EXISTS idx_reel_cache_video_processed ON reel_cache (video_processed);
+CREATE INDEX IF NOT EXISTS idx_reel_cache_created_at      ON reel_cache (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_reel_cache_vi_gin          ON reel_cache USING GIN (video_insights);
+```
 
 ---
 
-## 📊 Free Tier Limits
+## 🌐 Deployment (Render.com)
 
-| Service | Free Tier | Enough For |
-|---------|-----------|------------|
-| **Supabase** | 500 MB database | ~250,000 reel metadata entries |
-| **Cloudflare R2** | 10 GB storage | ~2,000 videos (5 MB each) |
-| **R2 Egress** | **Unlimited FREE** | 🎉 No bandwidth charges |
-| **Render.com** | 750 hours/month | ~1 month uptime |
+The `render.yaml` in the repo root handles everything:
+
+```yaml
+services:
+  - type: web
+    name: trailbuddy
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn backend_api:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.8
+    packages:
+      - ffmpeg          # installed as a system package before pip runs
+```
+
+**Steps:**
+1. Push code to GitHub
+2. Create a new Web Service on Render → connect your repo
+3. Render auto-detects `render.yaml`
+4. Add all environment variables in the Render dashboard → Environment tab
+5. Deploy
+
+> The `packages: [ffmpeg]` declaration installs ffmpeg system-wide before pip runs. Do **not** use `apt-get install` in the build command — Render runs as non-root.
+
+**Frontend (Netlify):**
+1. Drag and drop `index.html` + `style.css` into Netlify
+2. Make sure `API_URL` in `index.html` points to your Render URL
 
 ---
 
-## 🔍 API Endpoints
+## 📡 API Endpoints
 
-### `GET /health`
-Health check with configuration status.
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/analyze-reel` | SSE stream — full concurrent reel analysis pipeline |
+| `POST` | `/generate-from-reel` | Generate itinerary from analysed reel data |
+| `POST` | `/generate` | Generate itinerary from manual form input |
+| `GET` | `/cache-status?reel_url=...` | Debug — show what is cached for a reel |
+| `GET` | `/health` | Health check |
+| `POST` | `/extract-places-from-reel` | Legacy endpoint (backward compatibility) |
 
-### `POST /extract-places-from-reel`
-Extract places from Instagram reel URL.
+### `/analyze-reel` Request
 
-**Request:**
 ```json
 {
-  "reel_url": "https://www.instagram.com/reel/ABC123/"
+  "reel_url":   "https://www.instagram.com/reel/ABC123/",
+  "skip_audio": false,
+  "skip_video": false
 }
 ```
 
-**Response:**
+### SSE Event Format
+
+The endpoint streams `text/event-stream` events as each pipeline stage completes:
+
+```
+data: {"step":"apify","status":"done","message":"18 hashtags · \"Goa trip…\"","progress":28}
+
+data: {"step":"vision","status":"running","message":"GPT-4o analysing 45 frames…","progress":55}
+
+data: {"step":"complete","status":"done","message":"Ready!","progress":100,
+       "destination":"Goa","country":"India","places":[...],"video_insights":{...}}
+```
+
+**Step names:** `cache_check` → `apify` → `download` → `frames` → `audio_extract` → `vision` → `whisper` → `consolidate` → `save` → `places` → `complete`
+
+**Status values:** `idle` | `running` | `done` | `skipped` | `failed`
+
+---
+
+## 🔍 Cache Debug
+
+Check what is stored for any reel without running the full pipeline:
+
+```
+GET https://trailbuddy.onrender.com/cache-status?reel_url=https://instagram.com/reel/ABC123/
+```
+
+Response:
 ```json
 {
-  "success": true,
-  "destination": "Bali",
-  "places": [
-    {
-      "name": "Ubud Rice Terraces",
-      "type": "attraction",
-      "description": "UNESCO heritage site"
-    }
-  ]
+  "reel_id": "ABC123",
+  "cached": true,
+  "state": "D — FULL HIT: caption + video both cached → places shown instantly",
+  "fields": {
+    "caption": true,
+    "hashtags_count": 18,
+    "video_processed": true,
+    "video_insights_present": true,
+    "video_insights_places": 13,
+    "video_insights_vibe": "backpacking",
+    "inferred_duration_days": 5,
+    "r2_video_key": "ABC123.mp4"
+  }
 }
 ```
 
-### `POST /generate-from-reel`
-Generate itinerary from selected places.
+---
 
-**Request:**
-```json
-{
-  "reel_url": "https://www.instagram.com/reel/ABC123/",
-  "selected_places": ["Ubud Rice Terraces", "Tanah Lot Temple"],
-  "duration_override": 3,
-  "budget_level": "mid-range"
-}
-```
+## 🎬 Video Intelligence Pipeline
 
-### `POST /generate`
-Manual itinerary generation (no reel).
+TrailBuddy uses a two-pass frame extraction strategy to maximise OCR accuracy on travel reels:
+
+**Pass A — Scene-change detection** (`ffmpeg select filter, threshold 0.25`):
+Outputs a frame whenever the image changes significantly. Catches every text slide, location card, and itinerary overlay regardless of how briefly it appears.
+
+**Pass B — Dense uniform sampling** (`0.5s interval = 2 fps`):
+Fills gaps left by the scene filter for slow-zoom shots where text fades in gradually.
+
+Frames from both passes are merged, deduplicated (consecutive frames within 3% file-size = same content), and capped at 60 unique frames. All frames are sent to GPT-4o Vision at `detail="high"` in parallel batches of 15.
+
+The vision prompt has an explicit `itinerary_slides` field that captures the full text of any day-plan card or schedule visible in the video.
 
 ---
 
-## 💡 How Caching Works
+## 🤝 Contributing
 
-**First Request (Cache Miss):**
-```
-User → Backend → Apify (30-90s) → Download video
-                    ↓
-           Upload to R2 + Save to Supabase
-                    ↓
-              Return itinerary
-```
-
-**Second Request (Cache Hit):**
-```
-User → Backend → Check Supabase → Found! (<1s)
-                    ↓
-              Return cached data
-```
-
-**Result:** 99% faster for repeat requests 🚀
-
----
-
-## 🐛 Troubleshooting
-
-### "Missing Supabase config"
-- Check `.env` has `SUPABASE_URL` and `SUPABASE_SERVICE_KEY`
-- Use **service_role** key (not anon)
-
-### "relation 'reel_cache' does not exist"
-- Run SQL from Step 2 in Supabase SQL Editor
-
-### "Access Denied" (R2)
-- Verify API token permissions: "Object Read & Write"
-- Check `R2_BUCKET_NAME` matches exactly
-
-### Render timeout (30s limit)
-- Upgrade to Starter plan ($7/mo)
-- Or implement async polling
-
----
-
-## 📚 Documentation
-
-- [Supabase Setup Guide](./SUPABASE_R2_SETUP.md) — Full setup walkthrough
-- [Quick Start](./SUPABASE_R2_QUICKSTART.md) — 5-minute setup
-
----
-
-## 🔐 Security
-
-- Never commit `.env` to Git
-- Use environment variables in production
-- Rotate API keys periodically
-- Supabase `service_role` key bypasses RLS — keep it secret
-
----
-
-## 📈 Roadmap
-
-- [ ] Voice/audio extraction (Whisper)
-- [ ] Map routing between places
-- [ ] Budget calculator
-- [ ] Multi-reel merging
-- [ ] Google Maps integration
-- [ ] Export to PDF/Google Calendar
+1. Fork the repo
+2. Create a feature branch: `git checkout -b feature/map-view`
+3. Commit your changes: `git commit -m 'Add map-based itinerary view'`
+4. Push to the branch: `git push origin feature/map-view`
+5. Open a Pull Request
 
 ---
 
 ## 📄 License
 
-MIT License — Free to use, modify, and deploy.
+MIT License — see [LICENSE](LICENSE) for details.
 
 ---
 
-## 🎯 Quick Links
-
-- **Live Demo**: [trailbuddy.netlify.app](https://trailbuddy-ai-itinerary.netlify.app/)
-- **Supabase**: [supabase.com](https://supabase.com)
-- **Cloudflare R2**: [cloudflare.com/r2](https://www.cloudflare.com/products/r2/)
-- **OpenAI**: [platform.openai.com](https://platform.openai.com)
-- **Apify**: [apify.com](https://apify.com)
-
----
-
-Built with ❤️ for travelers who want instant, AI-powered itineraries.
+Built by [Himanshu Bhundere](https://github.com/Himanshu-Bhundere)
