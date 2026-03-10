@@ -159,21 +159,37 @@ class SupabaseR2Storage(StorageBackend):
             row = response.data[0]
             
             metadata = {
-                "url": row.get("url"),
-                "reel_id": row.get("reel_id"),
-                "caption": row.get("caption"),
-                "hashtags": row.get("hashtags", []),
-                "location": row.get("location"),
-                "likes": row.get("likes", 0),
-                "timestamp": row.get("timestamp"),
-                "owner_username": row.get("owner_username"),
-                "video_url": row.get("video_url"),
-                "display_url": row.get("display_url"),
-                "r2_video_key": row.get("r2_video_key"),
+                "url":                    row.get("url"),
+                "reel_id":                row.get("reel_id"),
+                "caption":                row.get("caption"),
+                "hashtags":               row.get("hashtags", []),
+                "location":               row.get("location"),
+                "likes":                  row.get("likes", 0),
+                "timestamp":              row.get("timestamp"),
+                "owner_username":         row.get("owner_username"),
+                "video_url":              row.get("video_url"),
+                "display_url":            row.get("display_url"),
+                "r2_video_key":           row.get("r2_video_key"),
+                # ── Video intelligence fields (were missing before this fix) ─
+                "video_processed":        row.get("video_processed", False),
+                "video_insights":         row.get("video_insights"),
+                "inferred_duration_days": row.get("inferred_duration_days"),
+                "inferred_budget_level":  row.get("inferred_budget_level"),
+                # ── Cache meta ───────────────────────────────────────────────
                 "_from_cache": True,
-                "_cached_at": row.get("created_at")
+                "_cached_at":  row.get("created_at"),
             }
-            
+
+            # Print exactly what was loaded so Render logs show cache state
+            print(
+                f"\U0001f5c4\ufe0f  Cache row for {row.get('reel_id')}: "
+                f"caption={'YES' if metadata['caption'] else 'NO'} | "
+                f"hashtags={len(metadata['hashtags'])} | "
+                f"video_processed={metadata['video_processed']} | "
+                f"video_insights={'YES (' + str(len(str(metadata['video_insights']))) + ' chars)' if metadata['video_insights'] else 'NO'} | "
+                f"r2_key={metadata['r2_video_key'] or 'NONE'}"
+            )
+
             return metadata
             
         except Exception as e:

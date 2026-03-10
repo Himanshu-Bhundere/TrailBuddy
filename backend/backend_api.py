@@ -305,12 +305,35 @@ async def _analyze_reel_stream(reel_url: str, skip_audio: bool, skip_video: bool
         has_video     = False   # video_processed=True and video_insights present
 
         if storage and storage.exists(reel_id):
-            cached       = storage.get_metadata(reel_id)
-            has_metadata = bool(
-                cached and (cached.get("caption") or cached.get("hashtags"))
-            )
+            cached = storage.get_metadata(reel_id)
+
+            # ── Evaluate exactly what is present ─────────────────────────
+            has_caption  = bool(cached and cached.get("caption"))
+            has_hashtags = bool(cached and cached.get("hashtags"))
+            has_metadata = has_caption or has_hashtags
             has_video    = bool(
-                cached and cached.get("video_processed") and cached.get("video_insights")
+                cached
+                and cached.get("video_processed") is True
+                and cached.get("video_insights")
+            )
+
+            # Emit a detailed SSE so the browser console / UI shows state
+            yield _sse("cache_check", "running",
+                f"DB row found — "
+                f"caption={'✅' if has_caption else '❌'} | "
+                f"hashtags={'✅ ' + str(len(cached.get('hashtags',[]))) if has_hashtags else '❌'} | "
+                f"video_processed={'✅' if cached.get('video_processed') else '❌'} | "
+                f"video_insights={'✅' if cached.get('video_insights') else '❌'}",
+                6
+            )
+            print(
+                f"\n🔍 CACHE STATE for {reel_id}:\n"
+                f"   caption        : {'YES' if has_caption else 'NO'}\n"
+                f"   hashtags       : {len(cached.get('hashtags',[])) if cached else 0}\n"
+                f"   video_processed: {cached.get('video_processed') if cached else 'N/A'}\n"
+                f"   video_insights : {'YES' if (cached and cached.get('video_insights')) else 'NO'}\n"
+                f"   r2_video_key   : {(cached or {}).get('r2_video_key') or 'NONE'}\n"
+                f"   → has_metadata={has_metadata}, has_video={has_video}\n"
             )
 
         # ── State D: Full cache hit ───────────────────────────────────────
@@ -946,6 +969,64 @@ async def generate_manual(request: ManualItineraryRequest):
     except Exception as e:
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Debug / Admin endpoints ──────────────────────────────────────────────────
+
+@app.get("/cache-status")
+async def cache_status(reel_url: str):
+    """
+    Debug endpoint — returns exactly what is stored in Supabase for a reel.
+    Usage: GET /cache-status?reel_url=https://instagram.com/reel/ABC123/
+
+    Shows: caption, hashtag count, video_processed flag, video_insights presence,
+           r2_video_key, and which cache state (A/B/C/D) the pipeline would pick.
+    """
+    if not storage:
+        return {"error": "No storage backend configured"}
+
+    reel_id = extract_reel_id_from_url(reel_url)
+
+    if not storage.exists(reel_id):
+        return {
+            "reel_id":    reel_id,
+            "cached":     False,
+            "state":      "A — nothing cached, full pipeline will run",
+        }
+
+    cached = storage.get_metadata(reel_id)
+    if not cached:
+        return {"reel_id": reel_id, "cached": False, "error": "Row exists but get_metadata returned None"}
+
+    has_caption  = bool(cached.get("caption"))
+    has_hashtags = bool(cached.get("hashtags"))
+    has_metadata = has_caption or has_hashtags
+    has_video    = bool(cached.get("video_processed") is True and cached.get("video_insights"))
+
+    if   has_metadata and has_video:   state = "D — FULL HIT: caption + video both cached → places shown instantly"
+    elif has_metadata and not has_video: state = "B — caption cached, video missing → will skip Apify, run video analysis"
+    elif has_video and not has_metadata: state = "C — video cached, caption missing → will skip video, run Apify only"
+    else:                              state = "A — row exists but no usable data → full pipeline will run"
+
+    insights = cached.get("video_insights") or {}
+
+    return {
+        "reel_id":              reel_id,
+        "cached":               True,
+        "state":                state,
+        "fields": {
+            "caption":              has_caption,
+            "caption_preview":      (cached.get("caption") or "")[:80],
+            "hashtags_count":       len(cached.get("hashtags") or []),
+            "video_processed":      cached.get("video_processed"),
+            "video_insights_present": bool(cached.get("video_insights")),
+            "video_insights_places":  len(insights.get("places", [])),
+            "video_insights_vibe":    insights.get("vibe", ""),
+            "inferred_duration_days": cached.get("inferred_duration_days"),
+            "inferred_budget_level":  cached.get("inferred_budget_level"),
+            "r2_video_key":           cached.get("r2_video_key"),
+        }
+    }
 
 
 # ── Backward-compatibility shims ─────────────────────────────────────────────
