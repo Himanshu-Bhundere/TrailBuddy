@@ -279,69 +279,123 @@ async def _analyze_reel_stream(reel_url: str, skip_audio: bool, skip_video: bool
     reel_id     : str           = extract_reel_id_from_url(reel_url)
 
     try:
-        # ── STEP 0: Cache check ───────────────────────────────────────────
+        # ══════════════════════════════════════════════════════════════════
+        # STEP 0 — Smart cache check
+        # ══════════════════════════════════════════════════════════════════
+        # Four possible states based on what is already in Supabase:
+        #
+        #   State A — Nothing cached
+        #             → run full pipeline: Apify + video/audio
+        #
+        #   State B — Caption/hashtags cached, NO video insights
+        #             → skip Apify, run video/audio pipeline only
+        #
+        #   State C — Video insights cached, NO caption/hashtags
+        #             (unusual but possible if Apify failed first time)
+        #             → run Apify, skip video/audio pipeline
+        #
+        #   State D — Both caption AND video insights cached  ← FULL HIT
+        #             → skip everything, go straight to place extraction
+        #
+        # ══════════════════════════════════════════════════════════════════
         yield _sse("cache_check", "running", "Checking database for cached data…", 4)
 
+        cached        = None
+        has_metadata  = False   # caption + hashtags present in DB
+        has_video     = False   # video_processed=True and video_insights present
+
         if storage and storage.exists(reel_id):
-            cached = storage.get_metadata(reel_id)
-            has_insights = cached and cached.get("video_processed")
+            cached       = storage.get_metadata(reel_id)
+            has_metadata = bool(
+                cached and (cached.get("caption") or cached.get("hashtags"))
+            )
+            has_video    = bool(
+                cached and cached.get("video_processed") and cached.get("video_insights")
+            )
 
-            if cached and has_insights:
-                # Full cache hit — replay steps as "done" instantly
-                yield _sse("cache_check", "done", "Full cache hit — loading instantly ⚡", 10)
-                for step, msg, pct in [
-                    ("apify",       "Caption & hashtags loaded from cache",       20),
-                    ("download",    "Video loaded from R2",                        30),
-                    ("frames",      "Frames loaded from cache",                   40),
-                    ("audio",       "Audio loaded from cache",                    50),
-                    ("vision",      "Vision data loaded from cache",              60),
-                    ("whisper",     "Transcript loaded from cache",               70),
-                    ("consolidate", "Insights loaded from cache",                 80),
-                    ("save",        "All data already in database",               88),
-                ]:
-                    yield _sse(step, "done", msg, pct)
+        # ── State D: Full cache hit ───────────────────────────────────────
+        if has_metadata and has_video:
+            yield _sse("cache_check", "done",
+                       "✅ Full cache hit — caption + video both available ⚡", 10)
 
-                # Still need to run place extraction (cheap LLM call)
-                yield _sse("places", "running", "Building place list…", 92)
-                insights = cached.get("video_insights", {})
-                places_result = await _run(
-                    extract_places_from_all_data,
-                    cached.get("caption", ""),
-                    cached.get("hashtags", []),
-                    cached.get("location", ""),
-                    insights,
-                )
-                yield _sse("places", "done", f"{len(places_result['places'])} places ready", 97)
+            for step, msg, pct in [
+                ("apify",        "Caption & hashtags loaded from cache",  18),
+                ("download",     "Video already processed — skipped",     26),
+                ("frames",       "Frames already analysed — skipped",     36),
+                ("audio_extract","Audio already transcribed — skipped",   46),
+                ("vision",       "Vision data loaded from cache",         56),
+                ("whisper",      "Transcript loaded from cache",          66),
+                ("consolidate",  "Insights loaded from cache",            76),
+                ("save",         "Already in database — skipped",         84),
+            ]:
+                yield _sse(step, "done", msg, pct)
 
-                yield _sse("complete", "done", "Ready!", 100,
-                           destination=places_result["destination"],
-                           country=places_result.get("country", ""),
-                           places=places_result["places"],
-                           video_insights=insights,
-                           cached_reel_data={
-                               "url": cached["url"], "caption": cached["caption"],
-                               "hashtags": cached["hashtags"], "location": cached["location"],
-                               "video_insights": insights,
-                           })
-                return
+            yield _sse("places", "running", "Building place list from cache…", 90)
+            insights = cached.get("video_insights", {})
+            places_result = await _run(
+                extract_places_from_all_data,
+                cached.get("caption", ""),
+                cached.get("hashtags", []),
+                cached.get("location", ""),
+                insights,
+            )
+            yield _sse("places", "done",
+                       f"{len(places_result['places'])} places ready", 97)
+            yield _sse("complete", "done", "Ready!", 100,
+                       destination      = places_result["destination"],
+                       country          = places_result.get("country", ""),
+                       places           = places_result["places"],
+                       video_insights   = insights,
+                       cached_reel_data = {
+                           "url":            cached.get("url", reel_url),
+                           "caption":        cached.get("caption", ""),
+                           "hashtags":       cached.get("hashtags", []),
+                           "location":       cached.get("location", ""),
+                           "video_insights": insights,
+                       })
+            return
 
-            elif cached:
-                # Partial cache — metadata exists but no video insights
-                yield _sse("cache_check", "done", "Metadata cached — running video analysis…", 8)
-                reel_data = cached
-            else:
-                yield _sse("cache_check", "done", "Not cached — starting fresh pipeline", 8)
-                reel_data = None
+        # ── State B: Caption cached, no video → skip Apify ───────────────
+        elif has_metadata and not has_video:
+            yield _sse("cache_check", "done",
+                       "Caption & hashtags cached — running video analysis only…", 8)
+            reel_data   = cached
+            need_apify  = False
+            need_video  = True
+            print(f"🗄️  Cache state B: metadata hit, video missing for {reel_id}")
+
+        # ── State C: Video cached, no caption → skip video pipeline ───────
+        elif has_video and not has_metadata:
+            yield _sse("cache_check", "done",
+                       "Video insights cached — fetching caption from Instagram only…", 8)
+            reel_data   = cached    # has video_insights but no caption
+            need_apify  = True
+            need_video  = False
+            print(f"🗄️  Cache state C: video hit, metadata missing for {reel_id}")
+
+        # ── State A: Nothing cached → full pipeline ───────────────────────
         else:
-            yield _sse("cache_check", "done", "Not cached — starting fresh pipeline", 8)
-            reel_data = None
+            yield _sse("cache_check", "done",
+                       "No cache — running full pipeline…", 8)
+            reel_data   = None
+            need_apify  = True
+            need_video  = True
+            print(f"🆕  Cache state A: no cache for {reel_id}")
 
-        # ── STEP 1: Apify fetch (only if we don't have metadata) ─────────
-        if reel_data is None:
-            yield _sse("apify", "running", "Fetching Instagram reel content…", 12)
+
+        # ── STEP 1: Apify fetch ───────────────────────────────────────────
+        # Skipped in State B (caption already cached) and State D (full hit).
+        if need_apify:
+            yield _sse("apify", "running", "Fetching caption & metadata from Instagram…", 12)
             try:
-                reel_data = await _run(_apify_fetch, reel_url)
-                hashtag_count = len(reel_data.get("hashtags", []))
+                fresh = await _run(_apify_fetch, reel_url)
+                # Merge fresh Apify data into any existing cached row
+                # (preserves cached video_insights if this is State C)
+                if reel_data:
+                    reel_data = {**reel_data, **fresh}
+                else:
+                    reel_data = fresh
+                hashtag_count   = len(reel_data.get("hashtags", []))
                 caption_preview = (reel_data.get("caption") or "")[:60]
                 yield _sse("apify", "done",
                            f"{hashtag_count} hashtags · \"{caption_preview}…\"", 28)
@@ -350,11 +404,19 @@ async def _analyze_reel_stream(reel_url: str, skip_audio: bool, skip_video: bool
                 yield _sse("error", "failed", str(e), 28)
                 return
         else:
-            yield _sse("apify", "done", "Instagram data loaded from cache", 28)
+            yield _sse("apify", "done",
+                       f"Caption cached — {len(reel_data.get('hashtags',[]))} hashtags ✓", 28)
 
         # ── STEP 2: Video download ────────────────────────────────────────
-        if skip_video:
-            yield _sse("download", "skipped", "Video analysis skipped (caption-only mode)", 35)
+        # Skipped in State C (video insights already in cache) or skip_video flag.
+        if not need_video or skip_video:
+            reason = "Video insights already cached" if (not need_video) else "Video analysis skipped (caption-only mode)"
+            yield _sse("download",     "skipped", reason, 35)
+            yield _sse("frames",       "skipped", reason, 43)
+            yield _sse("audio_extract","skipped", reason, 43)
+            yield _sse("vision",       "skipped", reason, 55)
+            yield _sse("whisper",      "skipped", reason, 55)
+            yield _sse("consolidate",  "skipped", reason, 76)
         else:
             # Priority: R2 (already uploaded) → Instagram CDN → skip
             r2_key    = (reel_data or {}).get("r2_video_key", "")
@@ -367,7 +429,7 @@ async def _analyze_reel_stream(reel_url: str, skip_audio: bool, skip_video: bool
                     size_mb = os.path.getsize(video_path) / (1024 * 1024)
                     yield _sse("download", "done", f"Loaded from R2: {size_mb:.1f} MB ⚡", 40)
                 else:
-                    # R2 failed (key expired / bucket issue) — fall back to CDN
+                    # R2 failed — fall back to CDN
                     yield _sse("download", "running", "R2 failed — downloading from Instagram CDN…", 35)
                     video_path = await _run(_download_video, video_url)
                     if video_path:
@@ -388,99 +450,118 @@ async def _analyze_reel_stream(reel_url: str, skip_audio: bool, skip_video: bool
             else:
                 yield _sse("download", "skipped", "No video URL available — using caption only", 40)
 
-        # ── STEP 3: Frame + Audio extraction — CONCURRENT ────────────────
-        if video_path and not skip_video:
-            yield _sse("frames",       "running", "Extracting video frames (ffmpeg)…", 43)
-            yield _sse("audio_extract","running", "Stripping audio track (ffmpeg)…",  43)
+        # ── STEPS 3-5: Frame/Audio/Vision/Whisper/Consolidation ─────────
+        # These steps are skipped entirely in State C (need_video=False),
+        # in which case we reuse the video_insights already in the DB row.
 
-            frame_task = _run(extract_frames, video_path)
-            audio_task = _run(extract_audio, video_path)
+        if need_video and not skip_video:
+            # ── STEP 3: Frame + Audio extraction — CONCURRENT ────────────
+            if video_path:
+                yield _sse("frames",       "running", "Extracting video frames (ffmpeg)…", 43)
+                yield _sse("audio_extract","running", "Stripping audio track (ffmpeg)…",  43)
 
-            frame_paths, audio_path = await asyncio.gather(frame_task, audio_task)
+                frame_task = _run(extract_frames, video_path)
+                audio_task = _run(extract_audio, video_path)
+                frame_paths, audio_path = await asyncio.gather(frame_task, audio_task)
+
+                if frame_paths:
+                    yield _sse("frames", "done", f"{len(frame_paths)} frames extracted", 52)
+                else:
+                    yield _sse("frames", "skipped", "No frames extracted", 52)
+
+                if audio_path:
+                    size_mb = os.path.getsize(audio_path) / (1024 * 1024)
+                    yield _sse("audio_extract", "done", f"Audio ready ({size_mb:.1f} MB)", 52)
+                else:
+                    yield _sse("audio_extract", "skipped", "No audio stream found", 52)
+            else:
+                yield _sse("frames",       "skipped", "No video downloaded — skipped", 52)
+                yield _sse("audio_extract","skipped", "No video downloaded — skipped", 52)
+
+            # ── STEP 4: Vision + Whisper — CONCURRENT ────────────────────
+            vision_data: dict = {}
+            audio_data:  dict = {}
+
+            vision_task  = None
+            whisper_task = None
 
             if frame_paths:
-                yield _sse("frames", "done", f"{len(frame_paths)} frames extracted", 52)
+                yield _sse("vision", "running", f"GPT-4o analysing {len(frame_paths)} frames…", 55)
+                vision_task = asyncio.create_task(_run(analyse_frames_with_vision, frame_paths))
+
+            if audio_path and not skip_audio:
+                yield _sse("whisper", "running", "Whisper transcribing voiceover…", 55)
+                whisper_task = asyncio.create_task(_run(transcribe_audio, audio_path))
+            elif skip_audio:
+                yield _sse("whisper", "skipped", "Audio transcription skipped", 55)
             else:
-                yield _sse("frames", "skipped", "No frames extracted", 52)
+                yield _sse("whisper", "skipped", "No audio track", 55)
 
-            if audio_path:
-                size_mb = os.path.getsize(audio_path) / (1024 * 1024)
-                yield _sse("audio_extract", "done", f"Audio ready ({size_mb:.1f} MB)", 52)
+            if vision_task and whisper_task:
+                vision_data, audio_data = await asyncio.gather(vision_task, whisper_task)
+            elif vision_task:
+                vision_data = await vision_task
+            elif whisper_task:
+                audio_data  = await whisper_task
+
+            if vision_data:
+                yield _sse("vision", "done",
+                           f"{len(vision_data.get('places',[]))} places, "
+                           f"{len(vision_data.get('scene_types',[]))} scenes detected", 68)
             else:
-                yield _sse("audio_extract", "skipped", "No audio stream found", 52)
+                yield _sse("vision", "skipped", "No frames to analyse", 68)
+
+            if audio_data and audio_data.get("has_speech"):
+                yield _sse("whisper", "done",
+                           f"{audio_data.get('word_count',0)} words · "
+                           f"{len(audio_data.get('itinerary_cues',[]))} cues", 72)
+            elif audio_data:
+                yield _sse("whisper", "done", "Audio has no speech (music only)", 72)
+
+            # ── STEP 5: Consolidation ─────────────────────────────────────
+            yield _sse("consolidate", "running", "Merging all signals…", 76)
+
+            insights = await _run(
+                consolidate_video_insights,
+                vision_data, audio_data,
+                reel_data.get("caption", ""),
+                reel_data.get("hashtags", []),
+            )
+
+            dur    = insights.get("inferred_duration_days")
+            budget = insights.get("inferred_budget_level", "")
+            vibe   = insights.get("vibe", "")
+            yield _sse("consolidate", "done",
+                       f"{dur}-day {budget} {vibe} trip confirmed" if dur
+                       else "All signals consolidated", 83)
+
         else:
-            yield _sse("frames",       "skipped", "No video — skipped", 52)
-            yield _sse("audio_extract","skipped", "No video — skipped", 52)
+            # State C: video was skipped — load insights directly from cache row
+            insights = (reel_data or {}).get("video_insights") or {}
+            n_places = len(insights.get("places", []))
+            yield _sse("consolidate", "done",
+                       f"Video insights loaded from cache ({n_places} places) ✓", 83)
+            print(f"🗄️  Using cached video_insights for {reel_id}: {n_places} places")
 
-        # ── STEP 4: Vision + Whisper — CONCURRENT ────────────────────────
-        vision_data: dict = {}
-        audio_data:  dict = {}
+        # ── STEP 6: Save to Supabase + Upload to R2 ─────────────────────
+        # Only save what is genuinely new to avoid overwriting cached data.
+        #   - need_apify=True  → we fetched fresh caption/hashtags, save them
+        #   - need_video=True  → we ran video pipeline, save insights + upload
+        #   - Both False       → nothing new to save (State D handled above)
+        if need_apify or need_video:
+            yield _sse("save", "running", "Saving new data to database…", 86)
+            tasks = []
+            if need_apify or need_video:
+                # Always upsert the full reel_data row (safe: has reel_id as key)
+                tasks.append(_run(_save_to_supabase, reel_id, reel_data, insights
+                                  if need_video else (reel_data.get("video_insights") or {})))
+            if need_video and video_path:
+                tasks.append(_run(_upload_to_r2, reel_id, video_path))
 
-        vision_task = None
-        whisper_task = None
-
-        if frame_paths and not skip_video:
-            yield _sse("vision", "running", f"GPT-4o analysing {len(frame_paths)} frames…", 55)
-            vision_task = asyncio.create_task(_run(analyse_frames_with_vision, frame_paths))
-
-        if audio_path and not skip_audio and not skip_video:
-            yield _sse("whisper", "running", "Whisper transcribing voiceover…", 55)
-            whisper_task = asyncio.create_task(_run(transcribe_audio, audio_path))
-        elif skip_audio:
-            yield _sse("whisper", "skipped", "Audio transcription skipped", 55)
+            await asyncio.gather(*tasks)
+            yield _sse("save", "done", "Database updated ✓", 90)
         else:
-            yield _sse("whisper", "skipped", "No audio track", 55)
-
-        # Await both concurrently
-        if vision_task and whisper_task:
-            vision_data, audio_data = await asyncio.gather(vision_task, whisper_task)
-        elif vision_task:
-            vision_data = await vision_task
-        elif whisper_task:
-            audio_data = await whisper_task
-
-        if vision_data:
-            n_places = len(vision_data.get("places", []))
-            n_scenes = len(vision_data.get("scene_types", []))
-            yield _sse("vision", "done", f"{n_places} places, {n_scenes} scenes detected", 68)
-        elif not skip_video:
-            yield _sse("vision", "skipped", "No frames to analyse", 68)
-
-        if audio_data and audio_data.get("has_speech"):
-            wc = audio_data.get("word_count", 0)
-            nc = len(audio_data.get("itinerary_cues", []))
-            yield _sse("whisper", "done", f"{wc} words transcribed · {nc} itinerary cues", 72)
-        elif audio_data:
-            yield _sse("whisper", "done", "Audio has no speech (music only)", 72)
-
-        # ── STEP 5: Consolidation ─────────────────────────────────────────
-        yield _sse("consolidate", "running", "Merging all signals…", 76)
-
-        insights = await _run(
-            consolidate_video_insights,
-            vision_data, audio_data,
-            reel_data.get("caption", ""),
-            reel_data.get("hashtags", []),
-        )
-
-        dur    = insights.get("inferred_duration_days")
-        budget = insights.get("inferred_budget_level", "")
-        vibe   = insights.get("vibe", "")
-        summary_msg = (
-            f"{dur}-day {budget} {vibe} trip confirmed"
-            if dur else "All signals consolidated"
-        )
-        yield _sse("consolidate", "done", summary_msg, 83)
-
-        # ── STEP 6: Save to Supabase + Upload to R2 — CONCURRENT ─────────
-        yield _sse("save", "running", "Saving to database & uploading video…", 86)
-
-        await asyncio.gather(
-            _run(_save_to_supabase, reel_id, reel_data, insights),
-            _run(_upload_to_r2, reel_id, video_path),
-        )
-
-        yield _sse("save", "done", "All data saved to database ✓", 90)
+            yield _sse("save", "skipped", "Nothing new to save", 90)
 
         # ── STEP 7: Place extraction (uses all consolidated data) ─────────
         yield _sse("places", "running", "Building place selection list…", 93)
@@ -862,6 +943,58 @@ async def generate_manual(request: ManualItineraryRequest):
     try:
         itinerary = generate_manual_itinerary(request)
         return {"success": True, "data": itinerary, "source": "manual"}
+    except Exception as e:
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Backward-compatibility shims ─────────────────────────────────────────────
+# These endpoints existed in the old two-step flow.
+# Old frontend versions (or cached HTML) may still call them.
+# They are re-implemented here so deployments with stale frontends don't 404.
+
+class _ExtractPlacesRequest(BaseModel):
+    reel_url: str
+
+@app.post("/extract-places-from-reel")
+async def compat_extract_places(request: _ExtractPlacesRequest):
+    """
+    Legacy endpoint (old two-step flow, Step 1).
+    Kept for backward compatibility with deployed frontends that haven't
+    received the new index.html yet.
+
+    Calls the same Apify + LLM logic as before and returns the same shape
+    the old frontend expected, so nothing breaks during the transition.
+    """
+    try:
+        reel_data     = await _run(_apify_fetch, request.reel_url)
+        reel_id       = extract_reel_id_from_url(request.reel_url)
+        places_result = await _run(
+            extract_places_from_all_data,
+            reel_data.get("caption", ""),
+            reel_data.get("hashtags", []),
+            reel_data.get("location", ""),
+            {},   # no video insights in legacy flow
+        )
+        return {
+            "success": True,
+            "reel_data": {
+                "url":      reel_data["url"],
+                "caption":  (reel_data.get("caption") or "")[:300],
+                "hashtags": reel_data.get("hashtags", []),
+                "location": reel_data.get("location", ""),
+            },
+            "cached_reel_data": {
+                "url":      reel_data["url"],
+                "caption":  reel_data.get("caption", ""),
+                "hashtags": reel_data.get("hashtags", []),
+                "location": reel_data.get("location", ""),
+                "likes":    reel_data.get("likes", 0),
+            },
+            "destination": places_result.get("destination", ""),
+            "country":     places_result.get("country", ""),
+            "places":      places_result.get("places", []),
+        }
     except Exception as e:
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
