@@ -895,6 +895,18 @@ function displayItinerary(data) {
     const results = document.getElementById('itineraryResults');
     results.style.display = 'block';
 
+    // Ensure travel_tips is always an array (defensive programming)
+    if (data.travel_tips && !Array.isArray(data.travel_tips)) {
+        if (typeof data.travel_tips === 'string') {
+            data.travel_tips = data.travel_tips.split('\n').map(t => t.trim()).filter(Boolean);
+        } else {
+            data.travel_tips = [];
+        }
+    }
+    if (!data.travel_tips) {
+        data.travel_tips = [];
+    }
+
     results.innerHTML = `
         <div class="itinerary-header fade-in">
             <h2 class="destination-name">${data.destination}</h2>
